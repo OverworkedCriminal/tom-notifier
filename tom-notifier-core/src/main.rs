@@ -14,5 +14,8 @@ fn main() -> anyhow::Result<()> {
 
     application::setup_tracing(&env)?;
 
+    tracing::info!("creating application state");
+    let state = application::create_state(&env);
+
     Ok(())
 }
