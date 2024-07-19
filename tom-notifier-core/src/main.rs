@@ -25,7 +25,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(env.bind_address).await?;
 
     tracing::info!("server started");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(application::shutdown_signal())
+        .await?;
+
+    tracing::info!("shutdown complete");
 
     Ok(())
 }
