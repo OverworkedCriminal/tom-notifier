@@ -2,7 +2,8 @@ mod application;
 
 use application::ApplicationEnv;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     {
         // Ignore error because .env file is not required
@@ -16,6 +17,15 @@ fn main() -> anyhow::Result<()> {
 
     tracing::info!("creating application state");
     let state = application::create_state(&env);
+
+    tracing::info!("creating application");
+    let app = application::create_application(state);
+
+    tracing::info!(address = %env.bind_address, "starting listener");
+    let listener = tokio::net::TcpListener::bind(env.bind_address).await?;
+
+    tracing::info!("server started");
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
