@@ -1,3 +1,7 @@
+mod application;
+
+use application::ApplicationEnv;
+
 fn main() {
     #[cfg(debug_assertions)]
     {
@@ -5,4 +9,6 @@ fn main() {
         // as long as env variables are set
         let _ = dotenvy::dotenv();
     }
+
+    let env = ApplicationEnv::parse();
 }
