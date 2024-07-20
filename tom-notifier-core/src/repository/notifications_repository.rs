@@ -1,4 +1,7 @@
-use super::{dto::Notification, error::Error};
+use super::{
+    dto::{InsertedNotification, Notification},
+    Error,
+};
 use crate::dto::input;
 use axum::async_trait;
 use bson::oid::ObjectId;
@@ -18,14 +21,14 @@ pub trait NotificationsRepository: Send + Sync {
     ///
     async fn insert(
         &self,
-        user_ids: &[Uuid],
+        user_ids: Vec<Uuid>,
         created_at: OffsetDateTime,
         invalidate_at: Option<OffsetDateTime>,
         producer_id: Uuid,
         producer_notification_id: i64,
-        content_type: &str,
-        content: &[u8],
-    ) -> Result<ObjectId, Error>;
+        content_type: String,
+        content: Vec<u8>,
+    ) -> Result<InsertedNotification, Error>;
 
     ///
     /// Updates notification invalidate_at

@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     application::setup_tracing(&env)?;
 
     tracing::info!("creating application state");
-    let state = application::create_state(&env);
+    let (state, state_to_close) = application::create_state(&env).await?;
 
     tracing::info!("creating application");
     let app = application::create_application(state);
@@ -31,6 +31,9 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(application::shutdown_signal())
         .await?;
+
+    tracing::info!("closing application");
+    application::close(state_to_close).await;
 
     tracing::info!("shutdown complete");
 
