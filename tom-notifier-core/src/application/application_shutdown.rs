@@ -1,3 +1,10 @@
+use super::ApplicationStateToClose;
+
+pub async fn close(state: ApplicationStateToClose) {
+    tracing::info!("closing connection with database");
+    state.db_client.shutdown().await;
+}
+
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
