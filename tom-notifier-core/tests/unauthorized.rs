@@ -3,13 +3,11 @@
 //!
 //! Any request should return 401 if URI and method is correct, 404 otherwise
 //!
+mod common;
+use common::*;
 
 use bson::oid::ObjectId;
 use reqwest::{Client, StatusCode};
-
-fn address() -> String {
-    std::env::var("TOM_NOTIFIER_CORE_BIND_ADDRESS").unwrap()
-}
 
 #[tokio::test]
 async fn post_notifications_undelivered() {
