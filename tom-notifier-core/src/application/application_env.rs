@@ -12,6 +12,7 @@ pub struct ApplicationEnv {
     pub db_name: String,
 
     pub max_notification_content_len: usize,
+    pub max_http_content_len: usize,
 
     /// Algorithms must belong to the same family
     pub jwt_algorithms: Vec<Algorithm>,
@@ -27,6 +28,8 @@ impl ApplicationEnv {
         let db_name = std::env::var("TOM_NOTIFIER_CORE_DB_NAME")?;
         let max_notification_content_len =
             std::env::var("TOM_NOTIFIER_CORE_MAX_NOTIFICATION_CONTENT_LEN")?.parse()?;
+        let max_http_content_len =
+            std::env::var("TOM_NOTIFIER_CORE_MAX_HTTP_CONTENT_LEN")?.parse()?;
         let jwt_algorithms =
             Self::parse_jwt_algorithms(std::env::var("TOM_NOTIFIER_CORE_JWT_ALGORITHMS")?)?;
         let jwt_algorithm = jwt_algorithms.first().ok_or(anyhow!(
@@ -42,6 +45,7 @@ impl ApplicationEnv {
             db_connection_string,
             db_name,
             max_notification_content_len,
+            max_http_content_len,
             jwt_algorithms,
             jwt_key,
         })
