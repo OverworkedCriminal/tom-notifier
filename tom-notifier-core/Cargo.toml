@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
-axum = "0.7.5"
+axum = { version = "0.7.5", features = ["macros"] }
 base64 = "0.22.1"
 bson = { version = "2.11.0", features = ["time-0_3", "uuid-1"] }
 dotenvy = "0.15.7"
@@ -24,3 +24,4 @@ uuid = "1.10.0"
 [dev-dependencies]
 mockall = "0.12.1"
 serde_json = "1.0.120"
+tower = "0.4.13"

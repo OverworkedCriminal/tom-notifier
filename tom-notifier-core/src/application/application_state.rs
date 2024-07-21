@@ -5,12 +5,13 @@ use crate::{
         NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
     },
 };
+use axum::extract::FromRef;
 use mongodb::{options::ClientOptions, Client};
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, FromRef)]
 pub struct ApplicationState {
-    notifications_service: Arc<dyn NotificationsService>,
+    pub notifications_service: Arc<dyn NotificationsService>,
 }
 
 pub struct ApplicationStateToClose {
