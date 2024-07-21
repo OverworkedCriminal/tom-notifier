@@ -1,3 +1,3 @@
 mod dto;
 
-pub use dto::*;
+pub use dto::{InnerUser, User};
