@@ -1,5 +1,6 @@
 use super::{
-    dto::{InsertedNotification, Notification, NotificationFindEntity},
+    dto::{InsertedNotification, Notification},
+    entity::NotificationFindEntity,
     Error, NotificationsRepository,
 };
 use crate::{dto::input, repository::entity::NotificationInsertEntity};

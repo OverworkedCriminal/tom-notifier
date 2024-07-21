@@ -1,4 +1,4 @@
-use super::NotificationFindEntity;
+use crate::repository::entity::NotificationFindEntity;
 use bson::oid::ObjectId;
 use time::OffsetDateTime;
 
