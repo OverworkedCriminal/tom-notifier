@@ -12,6 +12,7 @@ dotenvy = "0.15.7"
 futures-util = "0.3.30"
 mongodb = "3.0.1"
 serde = { version = "1.0.204", features = ["derive"] }
+strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"
 time = { version = "0.3.36", features = ["serde"] }
 tokio = { version = "1.38.1", features = ["rt-multi-thread", "signal"] }

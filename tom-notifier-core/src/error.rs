@@ -14,6 +14,9 @@ pub enum Error {
     #[error("validation error: notification too large {size}/{max_size}B")]
     ValidationNotificationTooLarge { size: usize, max_size: usize },
 
+    #[error("missing role")]
+    MissingRole,
+
     #[error("database error: {0}")]
     Database(#[from] repository::Error),
 }
