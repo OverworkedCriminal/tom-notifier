@@ -18,8 +18,8 @@ pub struct User {
 /// User information retrieved from his JWT.
 ///
 pub struct InnerUser {
-    id: Uuid,
-    roles: Vec<String>,
+    pub id: Uuid,
+    pub roles: Vec<String>,
 }
 
 impl User {
