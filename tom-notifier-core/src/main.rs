@@ -24,8 +24,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("creating application state");
     let (state, state_to_close) = application::create_state(&env).await?;
 
+    tracing::info!("creating middleware");
+    let middleware = application::create_middleware(&env);
+
     tracing::info!("creating application");
-    let app = application::create_application(state);
+    let app = application::create_application(state, middleware);
 
     tracing::info!(address = %env.bind_address, "starting listener");
     let listener = tokio::net::TcpListener::bind(env.bind_address).await?;
