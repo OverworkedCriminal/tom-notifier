@@ -1,3 +1,4 @@
+use crate::repository;
 use serde::Serialize;
 use time::OffsetDateTime;
 
@@ -20,6 +21,18 @@ mod se_base64 {
         let result = String::serialize(&base64, s);
 
         result
+    }
+}
+
+impl From<repository::Notification> for Notification {
+    fn from(value: repository::Notification) -> Self {
+        Self {
+            id: value.id.to_hex(),
+            created_at: value.created_at,
+            seen: value.seen,
+            content_type: value.content_type,
+            content: value.content,
+        }
     }
 }
 

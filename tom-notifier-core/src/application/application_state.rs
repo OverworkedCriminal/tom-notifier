@@ -1,9 +1,17 @@
 use super::ApplicationEnv;
-use crate::repository::NotificationsRepositoryImpl;
+use crate::{
+    repository::NotificationsRepositoryImpl,
+    service::notifications_service::{
+        NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
+    },
+};
 use mongodb::{options::ClientOptions, Client};
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct ApplicationState {}
+pub struct ApplicationState {
+    notifications_service: Arc<dyn NotificationsService>,
+}
 
 pub struct ApplicationStateToClose {
     pub db_client: Client,
@@ -19,6 +27,20 @@ pub async fn create_state(
 
     tracing::info!("creating repositories");
     let notifications_repository = NotificationsRepositoryImpl::new(db).await?;
+    let notifications_repository = Arc::new(notifications_repository);
 
-    Ok((ApplicationState {}, ApplicationStateToClose { db_client }))
+    tracing::info!("creating services");
+    let notifications_service_config = NotificationsServiceConfig {
+        max_content_len: env.max_notification_content_len,
+    };
+    let notifications_service =
+        NotificationsServiceImpl::new(notifications_service_config, notifications_repository);
+    let notifications_service = Arc::new(notifications_service);
+
+    Ok((
+        ApplicationState {
+            notifications_service,
+        },
+        ApplicationStateToClose { db_client },
+    ))
 }

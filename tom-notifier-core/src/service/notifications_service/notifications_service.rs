@@ -18,7 +18,8 @@ pub trait NotificationsService: Send + Sync {
     /// ### Errors
     /// - [Error::Validation] when
     ///     - invalidate_at already passed
-    ///     - content is too long
+    /// - [Error::ValidationNotificationTooLarge] when
+    ///     - notification content is too long
     /// - [Error::NotificationAlreadySaved] when producer
     ///    already created notification with producer_notification_id
     ///

@@ -1,3 +1,5 @@
+use crate::repository;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("notification not exist")]
@@ -8,4 +10,10 @@ pub enum Error {
 
     #[error("notification already saved")]
     NotificationAlreadySaved,
+
+    #[error("validation error: notification too large {size}/{max_size}B")]
+    ValidationNotificationTooLarge { size: usize, max_size: usize },
+
+    #[error("database error: {0}")]
+    Database(#[from] repository::Error),
 }
