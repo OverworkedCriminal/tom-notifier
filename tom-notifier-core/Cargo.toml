@@ -17,7 +17,7 @@ strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"
 time = { version = "0.3.36", features = ["serde"] }
 tokio = { version = "1.38.1", features = ["rt-multi-thread", "signal"] }
-tower-http = { version = "0.5.2", features = ["auth"] }
+tower-http = { version = "0.5.2", features = ["auth", "limit"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

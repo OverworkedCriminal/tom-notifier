@@ -1,9 +1,10 @@
 use super::ApplicationEnv;
 use crate::auth::JwtAuthorizationValidator;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
+use tower_http::{limit::RequestBodyLimitLayer, validate_request::ValidateRequestHeaderLayer};
 
 pub struct ApplicationMiddleware {
     pub auth: ValidateRequestHeaderLayer<JwtAuthorizationValidator>,
+    pub body_limit: RequestBodyLimitLayer,
 }
 
 pub fn create_middleware(env: &ApplicationEnv) -> ApplicationMiddleware {
@@ -12,5 +13,7 @@ pub fn create_middleware(env: &ApplicationEnv) -> ApplicationMiddleware {
         env.jwt_algorithms.clone(),
     ));
 
-    ApplicationMiddleware { auth }
+    let body_limit = RequestBodyLimitLayer::new(env.max_http_content_len);
+
+    ApplicationMiddleware { auth, body_limit }
 }

@@ -8,5 +8,6 @@ pub fn create_application(
 ) -> Router {
     routing()
         .with_state(application_state)
+        .layer(application_middleware.body_limit)
         .route_layer(application_middleware.auth)
 }
