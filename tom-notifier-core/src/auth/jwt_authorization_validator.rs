@@ -7,6 +7,7 @@ use axum::{
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use std::sync::Arc;
 use tower_http::validate_request::ValidateRequest;
+use tracing::Span;
 
 ///
 /// Middleware that validates JWT in Authorization header.
@@ -75,6 +76,8 @@ impl<B> ValidateRequest<B> for JwtAuthorizationValidator {
                     .body(Body::empty())
                     .unwrap()
             })?;
+
+        Span::current().record("user_id", user.id.to_string());
 
         request.extensions_mut().insert(user);
 

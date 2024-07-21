@@ -10,4 +10,5 @@ pub fn create_application(
         .with_state(application_state)
         .layer(application_middleware.body_limit)
         .route_layer(application_middleware.auth)
+        .layer(application_middleware.trace)
 }
