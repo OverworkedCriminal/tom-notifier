@@ -1,4 +1,5 @@
 mod application;
+mod auth;
 mod dto;
 mod error;
 mod repository;
