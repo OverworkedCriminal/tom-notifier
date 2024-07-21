@@ -1,7 +1,9 @@
 mod dto;
+mod jwt_authorization_validator;
 mod roles;
 
-pub use dto::{InnerUser, User};
+pub use dto::User;
+pub use jwt_authorization_validator::*;
 pub use roles::*;
 
 use crate::error::Error;
