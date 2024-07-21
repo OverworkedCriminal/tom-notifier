@@ -1,9 +1,9 @@
 mod dto;
-mod jwt_authorization_validator;
+mod middleware;
 mod roles;
 
 pub use dto::User;
-pub use jwt_authorization_validator::*;
+pub use middleware::jwt_auth_layer::JwtAuthLayer;
 pub use roles::*;
 
 use crate::error::Error;

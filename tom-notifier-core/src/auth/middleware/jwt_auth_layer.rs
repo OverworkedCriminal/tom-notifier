@@ -1,87 +1,31 @@
-use super::{dto::JwtClaims, User};
-use anyhow::anyhow;
-use axum::{
-    body::Body,
-    http::{header::AUTHORIZATION, HeaderValue, Request, Response, StatusCode},
-};
+use super::jwt_auth_service::JwtAuthService;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use std::sync::Arc;
-use tower_http::validate_request::ValidateRequest;
-use tracing::Span;
+use tower::Layer;
 
-///
-/// Middleware that validates JWT in Authorization header.
-/// If Authorization is correct [User] is added to request extensions.
-///
 #[derive(Clone)]
-pub struct JwtAuthorizationValidator {
-    inner: Arc<JwtAuthorizationValidatorInner>,
+pub struct JwtAuthLayer {
+    validation: Arc<Validation>,
+    key: Arc<DecodingKey>,
 }
 
-struct JwtAuthorizationValidatorInner {
-    key: DecodingKey,
-    validation: Validation,
-}
-
-impl JwtAuthorizationValidator {
+impl JwtAuthLayer {
     pub fn new(key: DecodingKey, algorithms: Vec<Algorithm>) -> Self {
         let mut validation = Validation::default();
         validation.algorithms = algorithms;
 
-        let inner = JwtAuthorizationValidatorInner { key, validation };
-
         Self {
-            inner: Arc::new(inner),
+            validation: Arc::new(validation),
+            key: Arc::new(key),
         }
-    }
-
-    fn try_parse_authorization_header(
-        &self,
-        authorization_header: Option<&HeaderValue>,
-    ) -> anyhow::Result<User> {
-        let Some(authorization_header) = authorization_header else {
-            return Err(anyhow!("missing Authorization header"));
-        };
-        let Ok(authorization_value) = authorization_header.to_str() else {
-            return Err(anyhow!("illegal character in Authorization header"));
-        };
-        if !authorization_value.starts_with("Bearer") {
-            return Err(anyhow!("unsupported autorization type"));
-        }
-        let Some(token) = authorization_value.get("Bearer ".len()..) else {
-            return Err(anyhow!("invalid jwt"));
-        };
-        let token_data =
-            jsonwebtoken::decode::<JwtClaims>(token, &self.inner.key, &self.inner.validation)?;
-
-        Ok(User::new(
-            token_data.claims.sub,
-            token_data.claims.realm_access.roles,
-        ))
     }
 }
 
-impl<B> ValidateRequest<B> for JwtAuthorizationValidator {
-    type ResponseBody = Body;
+impl<S> Layer<S> for JwtAuthLayer {
+    type Service = JwtAuthService<S>;
 
-    fn validate(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
-        let authorization_header = request.headers().get(AUTHORIZATION);
-
-        let user = self
-            .try_parse_authorization_header(authorization_header)
-            .map_err(|err| {
-                tracing::warn!(%err, "auth error");
-                Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .body(Body::empty())
-                    .unwrap()
-            })?;
-
-        Span::current().record("user_id", user.id.to_string());
-
-        request.extensions_mut().insert(user);
-
-        Ok(())
+    fn layer(&self, inner: S) -> Self::Service {
+        JwtAuthService::new(inner, self.validation.clone(), self.key.clone())
     }
 }
 
@@ -97,7 +41,6 @@ mod test {
     };
     use jsonwebtoken::Algorithm;
     use tower::ServiceExt;
-    use tower_http::validate_request::ValidateRequestHeaderLayer;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -168,9 +111,7 @@ mod test {
                     StatusCode::OK
                 }),
             )
-            .route_layer(ValidateRequestHeaderLayer::custom(
-                JwtAuthorizationValidator::new(key, algorithms),
-            ));
+            .route_layer(JwtAuthLayer::new(key, algorithms));
 
         let request = Request::builder()
             .method(Method::GET)
@@ -190,9 +131,7 @@ mod test {
 
         let router = Router::new()
             .route("/", get(|| async { StatusCode::OK }))
-            .route_layer(ValidateRequestHeaderLayer::custom(
-                JwtAuthorizationValidator::new(key, algorithms),
-            ));
+            .route_layer(JwtAuthLayer::new(key, algorithms));
 
         let mut request = Request::builder()
             .method(Method::GET)

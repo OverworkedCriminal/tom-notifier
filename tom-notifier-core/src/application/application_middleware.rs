@@ -1,28 +1,22 @@
 use super::ApplicationEnv;
-use crate::auth::JwtAuthorizationValidator;
+use crate::auth::JwtAuthLayer;
 use axum::http::Request;
 use tower_http::{
     classify::{ServerErrorsAsFailures, SharedClassifier},
     limit::RequestBodyLimitLayer,
     trace::{MakeSpan, TraceLayer},
-    validate_request::ValidateRequestHeaderLayer,
 };
 use uuid::Uuid;
 
 pub struct ApplicationMiddleware {
-    pub auth: ValidateRequestHeaderLayer<JwtAuthorizationValidator>,
+    pub auth: JwtAuthLayer,
     pub body_limit: RequestBodyLimitLayer,
     pub trace: TraceLayer<SharedClassifier<ServerErrorsAsFailures>, MyMakeSpan>,
 }
 
 pub fn create_middleware(env: &ApplicationEnv) -> ApplicationMiddleware {
-    let auth = ValidateRequestHeaderLayer::custom(JwtAuthorizationValidator::new(
-        env.jwt_key.clone(),
-        env.jwt_algorithms.clone(),
-    ));
-
+    let auth = JwtAuthLayer::new(env.jwt_key.clone(), env.jwt_algorithms.clone());
     let body_limit = RequestBodyLimitLayer::new(env.max_http_content_len);
-
     let trace = TraceLayer::new_for_http().make_span_with(MyMakeSpan);
 
     ApplicationMiddleware {
