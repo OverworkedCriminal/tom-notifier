@@ -7,26 +7,12 @@ pub fn address() -> String {
     std::env::var("TOM_NOTIFIER_CORE_BIND_ADDRESS").unwrap()
 }
 
-pub fn create_producer_bearer() -> String {
-    let jwt = create_producer_jwt();
-    let bearer = format!("Bearer {jwt}");
-
-    bearer
-}
-
-pub fn create_consumer_bearer() -> String {
-    let jwt = create_consumer_jwt();
-    let bearer = format!("Bearer {jwt}");
-
-    bearer
-}
-
 pub fn create_producer_jwt_with_id(user_id: Uuid) -> String {
     let claims = json!({
         "sub": user_id,
         "exp": 253402210800_i64,
         "realm_access": {
-            "roles": [ "produce_notifications" ]
+            "roles": [ "tom_notifier_produce_notifications" ]
         }
     });
 

@@ -4,7 +4,7 @@
 //! Any request should return 401 if URI and method is correct, 404 otherwise
 //!
 mod common;
-use common::*;
+pub use common::*;
 
 use bson::oid::ObjectId;
 use reqwest::{Client, StatusCode};
