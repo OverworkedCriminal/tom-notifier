@@ -4,7 +4,6 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 pub struct JwtClaims {
     pub sub: Uuid,
-    pub exp: i64,
     pub realm_access: JwtClaimsRealmAccess,
 }
 
