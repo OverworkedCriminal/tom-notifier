@@ -202,6 +202,13 @@ impl RabbitmqProducerStateMachine {
             self.process_confirm(confirm);
         }
 
+        // Schedule all unconfirmed messages for another send
+        tracing::info!("scheduling unconfirmed messages to be resent");
+        while let Some((message_count, message)) = self.unconfirmed_messages.pop_front() {
+            tracing::trace!(message_count, "unconfirmed message scheduled to be resent");
+            self.messages_tx.send(message).unwrap();
+        }
+
         self.state = State::WaitingForConnection;
     }
 
@@ -292,7 +299,7 @@ impl RabbitmqProducerStateMachine {
         let on_remove_ack = |_message_count, _message| {};
         let on_remove_nack = |message_count, message| {
             self.messages_tx.send(message).unwrap();
-            tracing::trace!(message_count, "nacked message scheduled for resend");
+            tracing::trace!(message_count, "nacked message scheduled to be resent");
         };
         let on_remove: &dyn Fn(u64, Box<Message>) = match confirm.variant {
             PublisherConfirmVariant::Ack => &on_remove_ack,
