@@ -28,7 +28,7 @@ impl RabbitmqProducer {
     )]
     pub async fn new(
         rabbitmq_connection: RabbitmqConnection,
-        exchange_declare_args: ExchangeDeclareArguments,
+        mut exchange_declare_args: ExchangeDeclareArguments,
     ) -> anyhow::Result<Self> {
         tracing::info!("starting producer");
 
@@ -49,6 +49,7 @@ impl RabbitmqProducer {
         channel.register_callback(channel_callback.clone()).await?;
 
         tracing::info!("declaring exchange");
+        exchange_declare_args.no_wait = false;
         channel
             .exchange_declare(exchange_declare_args.clone())
             .await?;
