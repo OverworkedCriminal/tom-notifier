@@ -13,7 +13,7 @@ use tokio::{
 ///
 /// RabbitMQ connection.
 /// It runs background task that recreates connection whenever io_failure occurs.
-/// 
+///
 /// Underlying connection can be accessed by [Self::connection].
 /// Blocked signal can be accesed by [Self::connection_blocked].
 ///
@@ -88,9 +88,10 @@ impl RabbitmqConnection {
         target = "rabbitmq_client::connection",
         skip_all
     )]
-    pub async fn close(self) -> anyhow::Result<()> {
+    pub async fn close(self) {
         let Ok(inner) = Arc::try_unwrap(self.inner) else {
-            anyhow::bail!("closing connection when connection clones exist is forbidden");
+            tracing::error!("closing connection when connection clones exist is forbidden");
+            return;
         };
 
         tracing::info!("closing keep alive task");
@@ -99,15 +100,14 @@ impl RabbitmqConnection {
         tracing::info!("closed keep alive task");
 
         tracing::info!("closing connection");
-        match inner.connection_rx.borrow().clone() {
+        let connection = inner.connection_rx.borrow().clone();
+        match connection {
             Some(connection) => match connection.close().await {
                 Ok(()) => tracing::info!("connection closed"),
                 Err(err) => tracing::warn!(%err, "closing connection failed"),
             },
             None => tracing::info!("connection already closed"),
         }
-
-        Ok(())
     }
 
     pub fn config(&self) -> &RabbitmqConnectionConfig {
