@@ -72,6 +72,16 @@ impl RabbitmqProducerStateMachine {
         &self.channel
     }
 
+    ///
+    /// Infinite loop that keeps producer alive.
+    /// It's designed to work with external signal to stop it.
+    /// ```text
+    /// tokio::select! {
+    ///     _ = notify.notified() => {}
+    ///     _ = state_machine.run() => {}
+    /// }
+    /// ```
+    ///
     pub async fn run(&mut self) {
         loop {
             match self.state {
