@@ -40,7 +40,7 @@ impl RabbitmqConnectionStateMachine {
     ///
     /// Infinite loop that keeps connection alive.
     /// It's designed to work with external signal to stop it.
-    /// ```ignore
+    /// ```text
     /// tokio::select! {
     ///     _ = notify.notified() => {}
     ///     _ = state_machine.run() => {}
