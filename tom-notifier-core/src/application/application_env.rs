@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use jsonwebtoken::{Algorithm, DecodingKey};
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 
 pub struct ApplicationEnv {
     pub log_directory: String,
@@ -20,6 +20,7 @@ pub struct ApplicationEnv {
 
     pub rabbitmq_connection_string: String,
     pub rabbitmq_notifications_exchange_name: String,
+    pub rabbitmq_retry_interval: Duration,
 }
 
 impl ApplicationEnv {
@@ -44,6 +45,9 @@ impl ApplicationEnv {
             std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING")?;
         let rabbitmq_notifications_exchange_name =
             std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
+        let rabbitmq_retry_interval =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_RETRY_INTERVAL")?.parse()?;
+        let rabbitmq_retry_interval = Duration::from_secs(rabbitmq_retry_interval);
 
         Ok(Self {
             log_directory,
@@ -57,6 +61,7 @@ impl ApplicationEnv {
             jwt_key,
             rabbitmq_connection_string,
             rabbitmq_notifications_exchange_name,
+            rabbitmq_retry_interval,
         })
     }
 

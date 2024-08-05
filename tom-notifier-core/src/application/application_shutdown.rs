@@ -1,8 +1,20 @@
 use super::ApplicationStateToClose;
+use std::sync::Arc;
 
 pub async fn close(state: ApplicationStateToClose) {
     tracing::info!("closing connection with database");
     state.db_client.shutdown().await;
+
+    tracing::info!("closing rabbitmq fanout service");
+    match Arc::try_unwrap(state.rabbitmq_fanout_service) {
+        Ok(rabbitmq_fanout_service) => {
+            rabbitmq_fanout_service.close().await;
+        }
+        Err(_) => tracing::error!("cannot close rabbitmq fanout service"),
+    }
+
+    tracing::info!("closing rabbitmq connection");
+    state.rabbitmq_connection.close().await;
 }
 
 pub async fn shutdown_signal() {
