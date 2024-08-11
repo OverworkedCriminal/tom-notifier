@@ -213,14 +213,14 @@ impl RabbitmqProducerStateMachine {
     }
 
     async fn waiting_for_connection_state(&mut self) {
-        // Update connection before loop, because it's possible
-        // that channel value has been changed again
-        self.connection = self.connection_rx.borrow_and_update().clone();
+        loop {
+            self.connection = self.connection_rx.borrow_and_update().clone();
+            if self.connection.is_some() {
+                break;
+            }
 
-        while self.connection.is_none() {
             // it's safe because connection_tx cannot be dropped before dropping producer
             self.connection_rx.changed().await.unwrap();
-            self.connection = self.connection_rx.borrow_and_update().clone();
         }
 
         self.state = State::RestoringProducer;
