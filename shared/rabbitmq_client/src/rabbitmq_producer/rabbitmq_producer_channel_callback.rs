@@ -35,9 +35,13 @@ impl ChannelCallback for RabbitmqProducerChannelCallback {
     async fn close(
         &mut self,
         _channel: &Channel,
-        _close: CloseChannel,
+        close: CloseChannel,
     ) -> Result<(), amqprs::error::Error> {
-        tracing::error!("received close");
+        tracing::error!(
+            code = close.reply_code(),
+            text = close.reply_text(),
+            "received close",
+        );
         Ok(())
     }
 
