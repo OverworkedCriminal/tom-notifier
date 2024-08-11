@@ -47,12 +47,18 @@ impl RabbitmqConnectionStateMachine {
         target = "rabbitmq_client::connection",
         skip_all
     )]
-    pub async fn run(&mut self, stop: Arc<Notify>) {
+    pub async fn run(mut self, stop: Arc<Notify>) {
         tracing::info!("state machine started");
-        
+
         tokio::select! {
             biased;
-            _ = stop.notified() => {}
+            _ = stop.notified() => {
+                tracing::info!("closing connection");
+                match self.connection.close().await {
+                    Ok(()) => tracing::info!("connection closed"),
+                    Err(err) => tracing::warn!(%err, "closing connection failed"),
+                }
+            }
             _ = async { loop {
                 match self.state {
                     State::Ok => {

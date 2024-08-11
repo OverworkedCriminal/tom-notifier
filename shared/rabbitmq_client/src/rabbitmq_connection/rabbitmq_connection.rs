@@ -53,7 +53,7 @@ impl RabbitmqConnection {
         tracing::info!("starting keep alive task");
         let close_notify = Arc::new(Notify::new());
         let (connection_tx, connection_rx) = watch::channel(Some(connection.clone()));
-        let mut state_machine = RabbitmqConnectionStateMachine::new(
+        let state_machine = RabbitmqConnectionStateMachine::new(
             config.clone(),
             connection,
             connection_tx,
@@ -97,20 +97,8 @@ impl RabbitmqConnection {
             return;
         };
 
-        tracing::info!("closing keep alive task");
         inner.close_notify.notify_one();
         inner.keep_alive_handle.await.unwrap(); // task can't be aborted and will never panic
-        tracing::info!("closed keep alive task");
-
-        tracing::info!("closing connection");
-        let connection = inner.connection_rx.borrow().clone();
-        match connection {
-            Some(connection) => match connection.close().await {
-                Ok(()) => tracing::info!("connection closed"),
-                Err(err) => tracing::warn!(%err, "closing connection failed"),
-            },
-            None => tracing::info!("connection already closed"),
-        }
     }
 
     pub fn config(&self) -> &RabbitmqConnectionConfig {
