@@ -4,7 +4,7 @@ use crate::{
     RabbitmqConnection,
 };
 use amqprs::{
-    channel::{Channel, ConfirmSelectArguments, ExchangeDeclareArguments},
+    channel::{ConfirmSelectArguments, ExchangeDeclareArguments},
     BasicProperties,
 };
 use std::sync::Arc;
@@ -16,7 +16,7 @@ use tokio::{
 pub struct RabbitmqProducer {
     messages_tx: mpsc::UnboundedSender<Box<Message>>,
 
-    task_handle: JoinHandle<Channel>,
+    task_handle: JoinHandle<()>,
     close_notify: Arc<Notify>,
 }
 
@@ -75,7 +75,10 @@ impl RabbitmqProducer {
             blocked_rx,
         );
 
-        let task_handle = tokio::spawn(keep_alive(close_notify.clone(), state_machine));
+        let close_notify_clone = Arc::clone(&close_notify);
+        let task_handle = tokio::spawn(async move {
+            state_machine.run(close_notify_clone).await;
+        });
 
         tracing::info!("producer started");
 
@@ -97,12 +100,7 @@ impl RabbitmqProducer {
         self.close_notify.notify_one();
 
         // task cannot fail/panic
-        let channel = self.task_handle.await.unwrap();
-
-        tracing::info!("closing channel");
-        if let Err(err) = channel.close().await {
-            tracing::warn!(%err, "closing channel failed");
-        }
+        self.task_handle.await.unwrap();
 
         tracing::info!("producer closed");
     }
@@ -117,35 +115,4 @@ impl RabbitmqProducer {
         // messages_rx always exist in external task that
         self.messages_tx.send(message).unwrap();
     }
-}
-
-///
-/// Runs producer state machine.
-/// Since state machine works in infinite loop this function
-/// should be called in external task.
-///
-/// ### Returns
-/// Channel used by state machine. There's no guarantee it will be still opened
-///
-#[tracing::instrument(
-    name = "RabbitMQ Producer",
-    target = "rabbitmq_client::producer",
-    skip_all
-)]
-async fn keep_alive(
-    close_notify: Arc<Notify>,
-    mut state_machine: RabbitmqProducerStateMachine,
-) -> Channel {
-    tracing::info!("keep alive started");
-
-    tokio::select! {
-        biased;
-
-        _ = close_notify.notified() => {}
-        _ = state_machine.run() => {}
-    }
-
-    tracing::info!("keep alive finished");
-
-    state_machine.channel().clone()
 }

@@ -7,8 +7,8 @@ use amqprs::{
     channel::{BasicPublishArguments, Channel, ConfirmSelectArguments, ExchangeDeclareArguments},
     connection::Connection,
 };
-use std::collections::VecDeque;
-use tokio::sync::{mpsc, watch};
+use std::{collections::VecDeque, sync::Arc};
+use tokio::sync::{mpsc, watch, Notify};
 
 pub struct RabbitmqProducerStateMachine {
     rabbitmq_connection: RabbitmqConnection,
@@ -68,41 +68,50 @@ impl RabbitmqProducerStateMachine {
         }
     }
 
-    pub fn channel(&self) -> &Channel {
-        &self.channel
-    }
-
     ///
     /// Infinite loop that keeps producer alive.
-    /// It's designed to work with external signal to stop it.
-    /// ```text
-    /// tokio::select! {
-    ///     _ = notify.notified() => {}
-    ///     _ = state_machine.run() => {}
-    /// }
-    /// ```
+    /// Loop can be stopped by using notify.
     ///
-    pub async fn run(&mut self) {
-        loop {
-            match self.state {
-                State::Ok => {
-                    tracing::info!("producer state: Ok");
-                    self.ok_state().await;
-                }
-                State::PreparingForConnection => {
-                    tracing::info!("producer state: PreparingForConnection");
-                    self.preparing_for_connection_state().await;
-                }
-                State::WaitingForConnection => {
-                    tracing::info!("producer state: WaitingForConnection");
-                    self.waiting_for_connection_state().await;
-                }
-                State::RestoringProducer => {
-                    tracing::info!("producer state: RestoringProducer");
-                    self.restoring_producer_state().await;
+    #[tracing::instrument(
+        name = "RabbitMQ Producer",
+        target = "rabbitmq_client::producer",
+        skip_all
+    )]
+    pub async fn run(mut self, stop: Arc<Notify>) {
+        tracing::info!("state machine started");
+
+        tokio::select! {
+            biased;
+            _ = stop.notified() => {
+                tracing::info!("closing channel");
+                match self.channel.close().await {
+                    Ok(()) => tracing::info!("channel closed"),
+                    Err(err) => tracing::warn!(%err, "closing channel failed"),
                 }
             }
+            _ = async { loop {
+                match self.state {
+                    State::Ok => {
+                        tracing::info!("state: Ok");
+                        self.ok_state().await;
+                    }
+                    State::PreparingForConnection => {
+                        tracing::info!("state: PreparingForConnection");
+                        self.preparing_for_connection_state().await;
+                    }
+                    State::WaitingForConnection => {
+                        tracing::info!("state: WaitingForConnection");
+                        self.waiting_for_connection_state().await;
+                    }
+                    State::RestoringProducer => {
+                        tracing::info!("state: RestoringProducer");
+                        self.restoring_producer_state().await;
+                    }
+                }
+            }} => {}
         }
+
+        tracing::info!("state machine finished");
     }
 
     async fn ok_state(&mut self) {
