@@ -1,7 +1,8 @@
 use super::{rabbitmq_connection_callback::RabbitmqConnectionCallback, RabbitmqConnectionConfig};
 use crate::retry::retry;
 use amqprs::connection::{Connection, OpenConnectionArguments};
-use tokio::sync::watch;
+use std::sync::Arc;
+use tokio::sync::{watch, Notify};
 
 pub struct RabbitmqConnectionStateMachine {
     config: RabbitmqConnectionConfig,
@@ -39,38 +40,58 @@ impl RabbitmqConnectionStateMachine {
 
     ///
     /// Infinite loop that keeps connection alive.
-    /// It's designed to work with external signal to stop it.
-    /// ```text
-    /// tokio::select! {
-    ///     _ = notify.notified() => {}
-    ///     _ = state_machine.run() => {}
-    /// }
-    /// ```
+    /// Loop can be stopped by using notify.
     ///
-    pub async fn run(&mut self) {
-        loop {
-            match self.state {
-                State::Ok => {
-                    tracing::info!("connection state: Ok");
-                    self.ok_state().await
+    #[tracing::instrument(
+        name = "RabbitMQ Connection",
+        target = "rabbitmq_client::connection",
+        skip_all
+    )]
+    pub async fn run(&mut self, stop: Arc<Notify>) {
+        tracing::info!("state machine started");
+        
+        tokio::select! {
+            biased;
+            _ = stop.notified() => {}
+            _ = async { loop {
+                match self.state {
+                    State::Ok => {
+                        tracing::info!("state: Ok");
+                        self.ok_state().await;
+                    }
+                    State::ClosingConnection => {
+                        tracing::info!("state: ClosingConnection");
+                        self.closing_connection_state().await;
+                    }
+                    State::RestoringConnection => {
+                        tracing::info!("state: RestoringConnection");
+                        self.restoring_connection_state().await
+                    }
+                    State::RestoringCallback => {
+                        tracing::info!("state: RestoringCallback");
+                        self.restoring_callback_state().await
+                    }
                 }
-                State::RestoringConnection => {
-                    tracing::info!("connection state: RestoringConnection");
-                    self.restoring_connection_state().await
-                }
-                State::RestoringCallback => {
-                    tracing::info!("connection state: RestoringCallback");
-                    self.restoring_callback_state().await
-                }
-            }
+            }} => {}
         }
+
+        tracing::info!("state machine finished");
     }
 
     async fn ok_state(&mut self) {
         self.connection.listen_network_io_failure().await;
-        tracing::warn!("connection broken");
+        tracing::warn!("connection failure");
 
+        self.state = State::ClosingConnection;
+    }
+
+    async fn closing_connection_state(&mut self) {
         self.connection_tx.send_replace(None);
+
+        match self.connection.clone().close().await {
+            Ok(()) => tracing::info!("connection closed"),
+            Err(err) => tracing::warn!(%err, "failed to close connection"),
+        }
 
         self.state = State::RestoringConnection;
     }
@@ -98,8 +119,8 @@ impl RabbitmqConnectionStateMachine {
         tokio::select! {
             // It's possible connection connection fails during recreating callbacks
             _ = self.connection.listen_network_io_failure() => {
-                tracing::warn!("connection broken");
-                self.state = State::RestoringConnection;
+                tracing::warn!("connection failed");
+                self.state = State::ClosingConnection;
             }
 
             _ = async {
@@ -124,6 +145,7 @@ impl RabbitmqConnectionStateMachine {
 
 enum State {
     Ok,
+    ClosingConnection,
     RestoringConnection,
     RestoringCallback,
 }

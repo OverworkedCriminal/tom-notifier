@@ -53,7 +53,7 @@ impl RabbitmqConnection {
         tracing::info!("starting keep alive task");
         let close_notify = Arc::new(Notify::new());
         let (connection_tx, connection_rx) = watch::channel(Some(connection.clone()));
-        let state_machine = RabbitmqConnectionStateMachine::new(
+        let mut state_machine = RabbitmqConnectionStateMachine::new(
             config.clone(),
             connection,
             connection_tx,
@@ -62,7 +62,10 @@ impl RabbitmqConnection {
             blocked_tx,
         );
 
-        let keep_alive_handle = tokio::spawn(keep_alive(Arc::clone(&close_notify), state_machine));
+        let close_notify_clone = Arc::clone(&close_notify);
+        let keep_alive_handle = tokio::spawn(async move {
+            state_machine.run(close_notify_clone).await;
+        });
 
         tracing::info!("connection opened");
 
@@ -121,22 +124,4 @@ impl RabbitmqConnection {
     pub fn connection_blocked(&self) -> watch::Receiver<bool> {
         self.inner.connection_blocked_rx.clone()
     }
-}
-
-#[tracing::instrument(
-    name = "RabbitMQ Connection",
-    target = "rabbitmq_client::connection",
-    skip_all
-)]
-async fn keep_alive(close_notify: Arc<Notify>, mut state_machine: RabbitmqConnectionStateMachine) {
-    tracing::info!("keep alive started");
-
-    tokio::select! {
-        biased;
-
-        _ = close_notify.notified() => {}
-        _ = state_machine.run() => {}
-    }
-
-    tracing::info!("keep alive finished");
 }
