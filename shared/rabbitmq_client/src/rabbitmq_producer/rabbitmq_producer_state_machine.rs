@@ -7,6 +7,7 @@ use amqprs::{
     channel::{BasicPublishArguments, Channel, ConfirmSelectArguments, ExchangeDeclareArguments},
     connection::Connection,
 };
+use anyhow::anyhow;
 use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::{mpsc, watch, Notify};
 
@@ -95,13 +96,17 @@ impl RabbitmqProducerStateMachine {
                         tracing::info!("state: Ok");
                         self.ok_state().await;
                     }
-                    State::PreparingForConnection => {
-                        tracing::info!("state: PreparingForConnection");
-                        self.preparing_for_connection_state().await;
-                    }
                     State::WaitingForConnection => {
                         tracing::info!("state: WaitingForConnection");
                         self.waiting_for_connection_state().await;
+                    }
+                    State::ProcessingPendingConfirmations => {
+                        tracing::info!("state: ProcessingPendingConfirmations");
+                        self.processing_pending_confirmations_state().await;
+                    }
+                    State::RecreatingChannel => {
+                        tracing::info!("state: RecreatingChannel");
+                        self.recreating_channel_state().await;
                     }
                     State::RestoringProducer => {
                         tracing::info!("state: RestoringProducer");
@@ -128,7 +133,7 @@ impl RabbitmqProducerStateMachine {
 
                 _ = self.connection_rx.changed() => {
                     tracing::info!("connection changed");
-                    self.state = State::PreparingForConnection;
+                    self.state = State::WaitingForConnection;
                     break;
                 }
 
@@ -163,14 +168,10 @@ impl RabbitmqProducerStateMachine {
                         mandatory: false,
                         immediate: false,
                     };
-                    let publish_result = self.channel
-                        .basic_publish(
-                            message.basic_properties.clone(),
-                            message.content.clone(),
-                            args,
-                        )
-                        .await;
-                    match publish_result {
+                    match self.channel
+                        .basic_publish(message.basic_properties.clone(), message.content.clone(), args)
+                        .await
+                    {
                         Ok(()) => {
                             self.unconfirmed_messages.push_back((message_count, message));
                             tracing::info!(message_count, "message processed");
@@ -180,7 +181,7 @@ impl RabbitmqProducerStateMachine {
                             // put message back to messages_tx to make sure it
                             // will be sent after recreating producer
                             self.messages_tx.send(message).unwrap();
-                            self.state = State::PreparingForConnection;
+                            self.state = State::ProcessingPendingConfirmations;
                             break;
                         }
                     }
@@ -189,20 +190,22 @@ impl RabbitmqProducerStateMachine {
         }
     }
 
-    async fn preparing_for_connection_state(&mut self) {
-        // Recreation of the producer involves creating a new channel
-        // so it's good to close the old one.
-        //
-        // It will fail in most cases because this state is entered
-        // after connection error,
-        // but it's possible to enter this state after failed basic.publish.
-        tracing::info!("closing channel");
-        match self.channel.clone().close().await {
-            Ok(()) => tracing::info!("channel closed"),
-            Err(err) => tracing::warn!(%err, "failed to close channel"),
+    async fn waiting_for_connection_state(&mut self) {
+        loop {
+            self.connection = self.connection_rx.borrow_and_update().clone();
+            if self.connection.is_some() {
+                break;
+            }
+
+            // it's safe because connection_tx cannot be dropped before dropping producer
+            self.connection_rx.changed().await.unwrap();
         }
 
-        // Since connection failed there won't be any new confirms.
+        self.state = State::ProcessingPendingConfirmations;
+    }
+
+    async fn processing_pending_confirmations_state(&mut self) {
+        // Since connection or channel failed there won't be any new confirms.
         // It means it's possible to clear channel here.
         tracing::info!("processing remaining confirmations");
         while !self.confirms_rx.is_empty() {
@@ -218,43 +221,40 @@ impl RabbitmqProducerStateMachine {
             self.messages_tx.send(message).unwrap();
         }
 
-        self.state = State::WaitingForConnection;
+        self.state = State::RecreatingChannel;
     }
 
-    async fn waiting_for_connection_state(&mut self) {
-        loop {
-            self.connection = self.connection_rx.borrow_and_update().clone();
-            if self.connection.is_some() {
-                break;
-            }
-
-            // it's safe because connection_tx cannot be dropped before dropping producer
-            self.connection_rx.changed().await.unwrap();
+    async fn recreating_channel_state(&mut self) {
+        // It's good to close old channel before recrea
+        // Recreation of the producer involves creating a new channel
+        // so it's good to close the old one.
+        //
+        // It will fail in most cases because this state is entered
+        // after connection error,
+        // but it's possible to enter this state after failed basic.publish.
+        tracing::info!("closing channel");
+        match self.channel.clone().close().await {
+            Ok(()) => tracing::info!("channel closed"),
+            Err(err) => tracing::warn!(%err, "failed to close channel"),
         }
 
-        self.state = State::RestoringProducer;
-    }
-
-    async fn restoring_producer_state(&mut self) {
         tokio::select! {
             biased;
 
             _ = self.connection_rx.changed() => {
                 tracing::info!("connection changed");
-                // confirmations are processed, but channel could have been
-                // opened so its necessary to go back to PreparingForConnection
-                self.state = State::PreparingForConnection;
+                self.state = State::WaitingForConnection;
             }
 
             _ = async {
-                // It's not possible to reach this state with connection None
+                // It's not possible to reach this state with connection == None
                 let connection = self.connection.as_ref().unwrap();
 
                 self.channel = retry(
                     self.rabbitmq_connection.config().retry_interval,
                     |attempt| tracing::info!(attempt, "recreating channel"),
                     |attempt, err| tracing::warn!(attempt, %err, "failed to recreate channel"),
-                    || async { connection.open_channel(None).await },
+                    || async { connection.open_channel(None).await }
                 )
                 .await;
 
@@ -265,37 +265,53 @@ impl RabbitmqProducerStateMachine {
                     self.rabbitmq_connection.config().retry_interval,
                     |attempt| tracing::info!(attempt, "recreating channel callback"),
                     |attempt, err| tracing::warn!(attempt, %err, "failed to recreate channel callback"),
-                    || async { self.channel.register_callback(self.channel_callback.clone()).await },
-                )
-                .await;
-
-                retry(
-                    self.rabbitmq_connection.config().retry_interval,
-                    |attempt| tracing::info!(attempt, "recreating exchange"),
-                    |attempt, err| tracing::warn!(attempt, %err, "failed to recreate exchange"),
-                    || async {
-                        self.channel
-                            .exchange_declare(self.exchange_declare_args.clone())
-                            .await
-                    }
-                )
-                .await;
-
-                retry(
-                    self.rabbitmq_connection.config().retry_interval,
-                    |attempt| tracing::info!(attempt, "enabling publisher confirms"),
-                    |attempt, err| tracing::warn!(attempt, %err, "failed to enable publisher confirms"),
-                    || async {
-                        self.channel
-                            .confirm_select(ConfirmSelectArguments::new(false))
-                            .await
-                    }
+                    || async { self.channel.register_callback(self.channel_callback.clone()).await }
                 )
                 .await;
             } => {
-                self.state = State::Ok;
+                self.state = State::RestoringProducer
             }
         }
+    }
+
+    async fn restoring_producer_state(&mut self) {
+        tokio::select! {
+            biased;
+
+            _ = self.connection_rx.changed() => {
+                tracing::info!("connection changed");
+                self.state = State::WaitingForConnection;
+            }
+
+            result = Self::try_restore_producer(&self.channel, self.exchange_declare_args.clone()) => {
+                match result {
+                    Ok(()) => self.state = State::Ok,
+                    Err(err) => {
+                        tracing::warn!(%err, "failed to recreate producer");
+                        self.state = State::RecreatingChannel;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn try_restore_producer(
+        channel: &Channel,
+        exchange_declare_args: ExchangeDeclareArguments,
+    ) -> anyhow::Result<()> {
+        tracing::info!("recreating exchange");
+        channel
+            .exchange_declare(exchange_declare_args)
+            .await
+            .map_err(|err| anyhow!("failed to recreate exchange: {err}"))?;
+
+        tracing::info!("enabling publisher confirms");
+        channel
+            .confirm_select(ConfirmSelectArguments::new(false))
+            .await
+            .map_err(|err| anyhow!("failed to enable publisher confirms: {err}"))?;
+
+        Ok(())
     }
 
     fn process_confirm(&mut self, confirm: PublisherConfirm) {
@@ -359,7 +375,8 @@ impl RabbitmqProducerStateMachine {
 
 enum State {
     Ok,
-    PreparingForConnection,
     WaitingForConnection,
+    ProcessingPendingConfirmations,
+    RecreatingChannel,
     RestoringProducer,
 }
