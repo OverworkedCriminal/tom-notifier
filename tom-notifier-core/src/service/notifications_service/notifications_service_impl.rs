@@ -106,6 +106,7 @@ impl NotificationsService for NotificationsServiceImpl {
                 inserted_notification.user_ids,
                 inserted_notification.id,
                 inserted_notification.created_at,
+                inserted_notification.producer_id,
                 false,
                 inserted_notification.content_type,
                 inserted_notification.content,
@@ -294,7 +295,7 @@ mod test {
         fanout_service
             .expect_send_new()
             .once()
-            .returning(|_, _, _, _, _, _| ());
+            .returning(|_, _, _, _, _, _, _| ());
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
@@ -345,7 +346,7 @@ mod test {
         fanout_service
             .expect_send_new()
             .once()
-            .returning(|_, _, _, _, _, _| ());
+            .returning(|_, _, _, _, _, _, _| ());
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
@@ -445,7 +446,7 @@ mod test {
         fanout_service
             .expect_send_new()
             .once()
-            .returning(|_, _, _, _, _, _| ());
+            .returning(|_, _, _, _, _, _, _| ());
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: MAX_CONTENT_LEN,
@@ -621,6 +622,7 @@ mod test {
             let notifications = vec![repository::Notification {
                 id: ObjectId::new(),
                 created_at: datetime!(2024-02-12 18:57:00 UTC),
+                producer_id: Uuid::new_v4().into(),
                 seen: false,
                 content_type: "utf-8".to_string(),
                 content: b"It's just a mock notification".to_vec(),
@@ -679,6 +681,7 @@ mod test {
                 repository::Notification {
                     id: ObjectId::new(),
                     created_at: OffsetDateTime::now_utc(),
+                    producer_id: Uuid::new_v4().into(),
                     seen: false,
                     content_type: "utf-8".to_string(),
                     content: b"abc".to_vec(),
@@ -686,6 +689,7 @@ mod test {
                 repository::Notification {
                     id: ObjectId::new(),
                     created_at: OffsetDateTime::now_utc(),
+                    producer_id: Uuid::new_v4().into(),
                     seen: false,
                     content_type: "utf-8".to_string(),
                     content: b"abc2".to_vec(),
@@ -753,6 +757,7 @@ mod test {
                     repository::Notification {
                         id: ObjectId::new(),
                         created_at: OffsetDateTime::now_utc(),
+                        producer_id: Uuid::new_v4().into(),
                         seen: false,
                         content_type: "utf-8".to_string(),
                         content: b"abc".to_vec(),
@@ -760,6 +765,7 @@ mod test {
                     repository::Notification {
                         id: ObjectId::new(),
                         created_at: OffsetDateTime::now_utc(),
+                        producer_id: Uuid::new_v4().into(),
                         seen: false,
                         content_type: "utf-8".to_string(),
                         content: b"abc2".to_vec(),
@@ -840,6 +846,7 @@ mod test {
             Ok(Some(repository::Notification {
                 id: ObjectId::new(),
                 created_at: OffsetDateTime::now_utc(),
+                producer_id: Uuid::new_v4().into(),
                 seen: false,
                 content_type: "utf-8".to_string(),
                 content: b"abc".to_vec(),

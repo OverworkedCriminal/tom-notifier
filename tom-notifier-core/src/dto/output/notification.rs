@@ -1,11 +1,13 @@
 use crate::repository;
 use serde::Serialize;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 #[derive(Serialize)]
 pub struct Notification {
     pub id: String,
     pub created_at: OffsetDateTime,
+    pub created_by: Uuid,
     pub seen: bool,
     pub content_type: String,
     #[serde(with = "se_base64")]
@@ -29,6 +31,7 @@ impl From<repository::Notification> for Notification {
         Self {
             id: value.id.to_hex(),
             created_at: value.created_at,
+            created_by: value.producer_id.into(),
             seen: value.seen,
             content_type: value.content_type,
             content: value.content,
@@ -49,6 +52,7 @@ mod test {
         let notification = Notification {
             id: "1".to_string(),
             created_at: OffsetDateTime::now_utc(),
+            created_by: Uuid::new_v4(),
             seen: false,
             content_type: "utf-8".to_string(),
             content: content.clone(),

@@ -29,7 +29,8 @@ async fn new_notification() {
 
     let client = Client::new();
     let user_id = Uuid::new_v4();
-    let producer = create_producer_jwt();
+    let producer_id = Uuid::new_v4();
+    let producer = create_producer_jwt_with_id(producer_id);
 
     let queue = format!("test core new_notification {}", OffsetDateTime::now_utc());
     let (connection, channel) = init_rabbitmq(&queue, "NEW").await;
@@ -91,6 +92,7 @@ async fn new_notification() {
         .replace_nanosecond(notification_timestamp.nanos as u32)
         .unwrap();
     assert!(time_before_send <= notification_datetime && notification_datetime <= time_now);
+    assert_eq!(notification.created_by.unwrap(), producer_id.to_string());
     assert_eq!(notification.seen.unwrap(), false);
     assert_eq!(notification.content_type.unwrap(), content_type);
     assert_eq!(notification.content.unwrap(), content);
@@ -202,6 +204,7 @@ async fn updated_notification() {
         .replace_nanosecond(notification_timestamp.nanos as u32)
         .unwrap();
     assert!(time_before_send <= notification_datetime && notification_datetime <= time_now);
+    assert!(notification.created_by.is_none());
     assert_eq!(notification.seen.unwrap(), seen);
     assert!(notification.content_type.is_none());
     assert!(notification.content.is_none());
@@ -304,6 +307,7 @@ async fn deleted_notification() {
         .replace_nanosecond(notification_timestamp.nanos as u32)
         .unwrap();
     assert!(time_before_send <= notification_datetime && notification_datetime <= time_now);
+    assert!(notification.created_by.is_none());
     assert!(notification.seen.is_none());
     assert!(notification.content_type.is_none());
     assert!(notification.content.is_none());

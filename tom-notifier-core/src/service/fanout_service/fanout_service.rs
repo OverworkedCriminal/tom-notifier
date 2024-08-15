@@ -14,6 +14,7 @@ pub trait FanoutService: Send + Sync {
         user_ids: Vec<Uuid>,
         id: ObjectId,
         timestamp: OffsetDateTime,
+        created_by: Uuid,
         seen: bool,
         content_type: String,
         content: Vec<u8>,

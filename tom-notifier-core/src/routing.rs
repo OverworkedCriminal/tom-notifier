@@ -840,6 +840,7 @@ mod test {
                 Ok(output::Notification {
                     id: ObjectId::new().to_hex(),
                     created_at: datetime!(2024-02-13 19:09:35 UTC),
+                    created_by: Uuid::new_v4(),
                     seen: true,
                     content_type: "utf-8".to_string(),
                     content: b"some content".to_vec(),
