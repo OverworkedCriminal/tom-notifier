@@ -2,6 +2,7 @@ use bson::oid::ObjectId;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+#[allow(unused)]
 pub struct InsertedNotification {
     pub id: ObjectId,
     pub created_at: OffsetDateTime,
