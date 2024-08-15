@@ -27,32 +27,32 @@ pub struct ApplicationEnv {
 
 impl ApplicationEnv {
     pub fn parse() -> anyhow::Result<Self> {
-        let log_directory = std::env::var("TOM_NOTIFIER_CORE_LOG_DIRECTORY")?;
-        let log_filename = std::env::var("TOM_NOTIFIER_CORE_LOG_FILENAME")?;
-        let bind_address = std::env::var("TOM_NOTIFIER_CORE_BIND_ADDRESS")?.parse()?;
-        let db_connection_string = std::env::var("TOM_NOTIFIER_CORE_DB_CONNECTION_STRING")?;
-        let db_name = std::env::var("TOM_NOTIFIER_CORE_DB_NAME")?;
+        let log_directory = Self::env_var("TOM_NOTIFIER_CORE_LOG_DIRECTORY")?;
+        let log_filename = Self::env_var("TOM_NOTIFIER_CORE_LOG_FILENAME")?;
+        let bind_address = Self::env_var("TOM_NOTIFIER_CORE_BIND_ADDRESS")?.parse()?;
+        let db_connection_string = Self::env_var("TOM_NOTIFIER_CORE_DB_CONNECTION_STRING")?;
+        let db_name = Self::env_var("TOM_NOTIFIER_CORE_DB_NAME")?;
         let max_notification_content_len =
-            std::env::var("TOM_NOTIFIER_CORE_MAX_NOTIFICATION_CONTENT_LEN")?.parse()?;
+            Self::env_var("TOM_NOTIFIER_CORE_MAX_NOTIFICATION_CONTENT_LEN")?.parse()?;
         let max_http_content_len =
-            std::env::var("TOM_NOTIFIER_CORE_MAX_HTTP_CONTENT_LEN")?.parse()?;
+            Self::env_var("TOM_NOTIFIER_CORE_MAX_HTTP_CONTENT_LEN")?.parse()?;
         let jwt_algorithms =
-            Self::parse_jwt_algorithms(std::env::var("TOM_NOTIFIER_CORE_JWT_ALGORITHMS")?)?;
+            Self::parse_jwt_algorithms(Self::env_var("TOM_NOTIFIER_CORE_JWT_ALGORITHMS")?)?;
         let jwt_algorithm = jwt_algorithms.first().ok_or(anyhow!(
             "TOM_NOTIFIER_CORE_JWT_ALGORITHMS need to contain at least one algorithm"
         ))?;
         let jwt_key =
-            Self::parse_jwt_key(jwt_algorithm, std::env::var("TOM_NOTIFIER_CORE_JWT_KEY")?)?;
+            Self::parse_jwt_key(jwt_algorithm, Self::env_var("TOM_NOTIFIER_CORE_JWT_KEY")?)?;
         let rabbitmq_connection_string =
-            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING")?;
+            Self::env_var("TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING")?;
         let rabbitmq_notifications_exchange_name =
-            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
+            Self::env_var("TOM_NOTIFIER_CORE_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
         let rabbitmq_confirmations_exchange_name =
-            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME")?;
+            Self::env_var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME")?;
         let rabbitmq_confirmations_queue_name =
-            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_QUEUE_NAME")?;
+            Self::env_var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_QUEUE_NAME")?;
         let rabbitmq_retry_interval =
-            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_RETRY_INTERVAL")?.parse()?;
+            Self::env_var("TOM_NOTIFIER_CORE_RABBITMQ_RETRY_INTERVAL")?.parse()?;
         let rabbitmq_retry_interval = Duration::from_secs(rabbitmq_retry_interval);
 
         Ok(Self {
@@ -71,6 +71,10 @@ impl ApplicationEnv {
             rabbitmq_confirmations_queue_name,
             rabbitmq_retry_interval,
         })
+    }
+
+    fn env_var(name: &'static str) -> anyhow::Result<String> {
+        std::env::var(name).map_err(|_| anyhow!("environment variable {name} not set"))
     }
 
     fn parse_jwt_algorithms(jwt_algorithms: String) -> Result<Vec<Algorithm>, anyhow::Error> {
