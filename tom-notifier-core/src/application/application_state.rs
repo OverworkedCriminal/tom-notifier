@@ -2,6 +2,9 @@ use super::ApplicationEnv;
 use crate::{
     repository::NotificationsRepositoryImpl,
     service::{
+        confirmations_consumer_service::{
+            ConfirmationsConsumerService, ConfirmationsConsumerServiceConfig,
+        },
         fanout_service::{RabbitmqFanoutService, RabbitmqFanoutServiceConfig},
         notifications_service::{
             NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
@@ -23,6 +26,7 @@ pub struct ApplicationStateToClose {
     pub db_client: Client,
     pub rabbitmq_connection: RabbitmqConnection,
     pub rabbitmq_fanout_service: Arc<RabbitmqFanoutService>,
+    pub rabbitmq_confirmations_consumer_service: ConfirmationsConsumerService,
 }
 
 pub async fn create_state(
@@ -52,6 +56,17 @@ pub async fn create_state(
         RabbitmqFanoutService::new(config, rabbitmq_connection.clone()).await?;
     let rabbitmq_fanout_service = Arc::new(rabbitmq_fanout_service);
 
+    let config = ConfirmationsConsumerServiceConfig {
+        exchange: env.rabbitmq_confirmations_exchange_name.clone(),
+        queue: env.rabbitmq_confirmations_queue_name.clone(),
+    };
+    let rabbitmq_confirmations_consumer_service = ConfirmationsConsumerService::new(
+        config,
+        rabbitmq_connection.clone(),
+        notifications_repository.clone(),
+    )
+    .await?;
+
     let notifications_service_config = NotificationsServiceConfig {
         max_content_len: env.max_notification_content_len,
     };
@@ -70,6 +85,7 @@ pub async fn create_state(
             db_client,
             rabbitmq_connection,
             rabbitmq_fanout_service,
+            rabbitmq_confirmations_consumer_service,
         },
     ))
 }

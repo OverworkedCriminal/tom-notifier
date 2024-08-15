@@ -13,6 +13,9 @@ pub async fn close(state: ApplicationStateToClose) {
         Err(_) => tracing::error!("cannot close rabbitmq fanout service"),
     }
 
+    tracing::info!("closing rabbitmq confirmations consumer");
+    state.rabbitmq_confirmations_consumer_service.close().await;
+
     tracing::info!("closing rabbitmq connection");
     state.rabbitmq_connection.close().await;
 }
