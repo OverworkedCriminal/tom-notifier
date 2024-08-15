@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use jsonwebtoken::{Algorithm, DecodingKey};
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 
 pub struct ApplicationEnv {
     pub log_directory: String,
@@ -17,6 +17,12 @@ pub struct ApplicationEnv {
     /// Algorithms must belong to the same family
     pub jwt_algorithms: Vec<Algorithm>,
     pub jwt_key: DecodingKey,
+
+    pub rabbitmq_connection_string: String,
+    pub rabbitmq_notifications_exchange_name: String,
+    pub rabbitmq_confirmations_exchange_name: String,
+    pub rabbitmq_confirmations_queue_name: String,
+    pub rabbitmq_retry_interval: Duration,
 }
 
 impl ApplicationEnv {
@@ -37,6 +43,17 @@ impl ApplicationEnv {
         ))?;
         let jwt_key =
             Self::parse_jwt_key(jwt_algorithm, std::env::var("TOM_NOTIFIER_CORE_JWT_KEY")?)?;
+        let rabbitmq_connection_string =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING")?;
+        let rabbitmq_notifications_exchange_name =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
+        let rabbitmq_confirmations_exchange_name =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME")?;
+        let rabbitmq_confirmations_queue_name =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_QUEUE_NAME")?;
+        let rabbitmq_retry_interval =
+            std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_RETRY_INTERVAL")?.parse()?;
+        let rabbitmq_retry_interval = Duration::from_secs(rabbitmq_retry_interval);
 
         Ok(Self {
             log_directory,
@@ -48,6 +65,11 @@ impl ApplicationEnv {
             max_http_content_len,
             jwt_algorithms,
             jwt_key,
+            rabbitmq_connection_string,
+            rabbitmq_notifications_exchange_name,
+            rabbitmq_confirmations_exchange_name,
+            rabbitmq_confirmations_queue_name,
+            rabbitmq_retry_interval,
         })
     }
 

@@ -1,12 +1,20 @@
 use super::ApplicationEnv;
 use crate::{
     repository::NotificationsRepositoryImpl,
-    service::notifications_service::{
-        NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
+    service::{
+        confirmations_consumer_service::{
+            ConfirmationsConsumerService, ConfirmationsConsumerServiceConfig,
+        },
+        fanout_service::{RabbitmqFanoutService, RabbitmqFanoutServiceConfig},
+        notifications_service::{
+            NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
+        },
     },
 };
+use amqprs::connection::OpenConnectionArguments;
 use axum::extract::FromRef;
 use mongodb::{options::ClientOptions, Client};
+use rabbitmq_client::{RabbitmqConnection, RabbitmqConnectionConfig};
 use std::sync::Arc;
 
 #[derive(Clone, FromRef)]
@@ -16,6 +24,9 @@ pub struct ApplicationState {
 
 pub struct ApplicationStateToClose {
     pub db_client: Client,
+    pub rabbitmq_connection: RabbitmqConnection,
+    pub rabbitmq_fanout_service: Arc<RabbitmqFanoutService>,
+    pub rabbitmq_confirmations_consumer_service: ConfirmationsConsumerService,
 }
 
 pub async fn create_state(
@@ -31,17 +42,50 @@ pub async fn create_state(
     let notifications_repository = Arc::new(notifications_repository);
 
     tracing::info!("creating services");
+    let config = RabbitmqConnectionConfig {
+        retry_interval: env.rabbitmq_retry_interval,
+    };
+    let open_connection_args =
+        OpenConnectionArguments::try_from(env.rabbitmq_connection_string.as_str())?;
+    let rabbitmq_connection = RabbitmqConnection::new(config, open_connection_args).await?;
+
+    let config = RabbitmqFanoutServiceConfig {
+        exchange_name: env.rabbitmq_notifications_exchange_name.clone(),
+    };
+    let rabbitmq_fanout_service =
+        RabbitmqFanoutService::new(config, rabbitmq_connection.clone()).await?;
+    let rabbitmq_fanout_service = Arc::new(rabbitmq_fanout_service);
+
+    let config = ConfirmationsConsumerServiceConfig {
+        exchange: env.rabbitmq_confirmations_exchange_name.clone(),
+        queue: env.rabbitmq_confirmations_queue_name.clone(),
+    };
+    let rabbitmq_confirmations_consumer_service = ConfirmationsConsumerService::new(
+        config,
+        rabbitmq_connection.clone(),
+        notifications_repository.clone(),
+    )
+    .await?;
+
     let notifications_service_config = NotificationsServiceConfig {
         max_content_len: env.max_notification_content_len,
     };
-    let notifications_service =
-        NotificationsServiceImpl::new(notifications_service_config, notifications_repository);
+    let notifications_service = NotificationsServiceImpl::new(
+        notifications_service_config,
+        notifications_repository,
+        rabbitmq_fanout_service.clone(),
+    );
     let notifications_service = Arc::new(notifications_service);
 
     Ok((
         ApplicationState {
             notifications_service,
         },
-        ApplicationStateToClose { db_client },
+        ApplicationStateToClose {
+            db_client,
+            rabbitmq_connection,
+            rabbitmq_fanout_service,
+            rabbitmq_confirmations_consumer_service,
+        },
     ))
 }
