@@ -58,8 +58,6 @@ impl RabbitmqProducer {
         let args = ConfirmSelectArguments::new(false);
         channel.confirm_select(args).await?;
 
-        let close_notify = Arc::new(Notify::new());
-
         let state_machine = RabbitmqProducerStateMachine::new(
             rabbitmq_connection,
             connection,
@@ -75,6 +73,7 @@ impl RabbitmqProducer {
             blocked_rx,
         );
 
+        let close_notify = Arc::new(Notify::new());
         let close_notify_clone = Arc::clone(&close_notify);
         let task_handle = tokio::spawn(async move {
             state_machine.run(close_notify_clone).await;

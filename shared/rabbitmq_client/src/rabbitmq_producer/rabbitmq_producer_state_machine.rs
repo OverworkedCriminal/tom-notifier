@@ -225,13 +225,8 @@ impl RabbitmqProducerStateMachine {
     }
 
     async fn recreating_channel_state(&mut self) {
-        // It's good to close old channel before recrea
-        // Recreation of the producer involves creating a new channel
-        // so it's good to close the old one.
-        //
-        // It will fail in most cases because this state is entered
-        // after connection error,
-        // but it's possible to enter this state after failed basic.publish.
+        // It's good to close channel just in case to prevent
+        // resource leak. Failure is not a problem at this point
         tracing::info!("closing channel");
         match self.channel.clone().close().await {
             Ok(()) => tracing::info!("channel closed"),

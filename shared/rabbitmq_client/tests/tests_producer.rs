@@ -1,54 +1,20 @@
+mod common;
+
 use amqprs::{
     channel::{
         BasicGetArguments, ExchangeDeclareArguments, ExchangeType, QueueBindArguments,
         QueueDeclareArguments, QueueDeleteArguments,
     },
-    connection::{Connection, OpenConnectionArguments},
     BasicProperties,
 };
-use rabbitmq_client::{RabbitmqConnection, RabbitmqConnectionConfig, RabbitmqProducer};
+use common::*;
+use rabbitmq_client::RabbitmqProducer;
 use serial_test::serial;
 use std::{process::Command, sync::Once, time::Duration};
 use time::OffsetDateTime;
 use tokio::time::{sleep, timeout};
-use tracing::level_filters::LevelFilter;
 
 static BEFORE_ALL: Once = Once::new();
-
-fn init_test_environment() {
-    // read envs from .env file
-    dotenvy::dotenv().unwrap();
-
-    // setup tracing
-    tracing_subscriber::fmt()
-        .with_max_level(LevelFilter::TRACE)
-        .with_target(false)
-        .with_test_writer()
-        .init();
-}
-
-async fn create_connection() -> Result<Connection, amqprs::error::Error> {
-    let rabbitmq_connection_uri = std::env::var("TEST_RABBITMQ_CONNECTION_URI").unwrap();
-    let args = OpenConnectionArguments::try_from(rabbitmq_connection_uri.as_str()).unwrap();
-
-    Connection::open(&args).await
-}
-
-async fn create_rabbitmq_connection() -> RabbitmqConnection {
-    let rabbitmq_connection_uri = std::env::var("TEST_RABBITMQ_CONNECTION_URI").unwrap();
-    let retry_interval = std::env::var("TEST_RETRY_INTERVAL")
-        .unwrap()
-        .parse()
-        .unwrap();
-
-    let config = RabbitmqConnectionConfig {
-        retry_interval: Duration::from_secs(retry_interval),
-    };
-    let args = OpenConnectionArguments::try_from(rabbitmq_connection_uri.as_str()).unwrap();
-    let connection = RabbitmqConnection::new(config, args).await.unwrap();
-
-    connection
-}
 
 #[tokio::test]
 #[serial]
