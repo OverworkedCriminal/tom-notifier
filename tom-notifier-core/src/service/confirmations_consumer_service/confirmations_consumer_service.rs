@@ -94,6 +94,13 @@ impl Consumer {
 
 #[async_trait]
 impl AsyncConsumer for Consumer {
+    #[tracing::instrument(
+        name = "Confirmations Consumer",
+        skip_all,
+        fields(
+            delivery_tag = deliver.delivery_tag(),
+        )
+    )]
     async fn consume(
         &mut self,
         channel: &Channel,
