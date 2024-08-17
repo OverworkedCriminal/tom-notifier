@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use jwt_auth::error::MissingRoleError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -18,8 +19,8 @@ pub enum Error {
     #[error("validation error: notification too large {size}/{max_size}B")]
     ValidationNotificationTooLarge { size: usize, max_size: usize },
 
-    #[error("missing role")]
-    MissingRole,
+    #[error("auth error: {0}")]
+    Auth(#[from] MissingRoleError),
 
     #[error("database error: {0}")]
     Database(#[from] repository::Error),
@@ -37,7 +38,7 @@ impl IntoResponse for Error {
                 max_size: _,
             } => StatusCode::PAYLOAD_TOO_LARGE,
             Error::NotificationAlreadySaved => StatusCode::CONFLICT,
-            Error::MissingRole => StatusCode::FORBIDDEN,
+            Error::Auth(_) => StatusCode::FORBIDDEN,
             Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
         .into_response()
