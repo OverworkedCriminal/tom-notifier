@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("creating application state");
     let (state, state_to_close) = application::create_state(&env).await?;
 
+    tracing::info!("creating middleware");
+    let middleware = application::create_middleware(&env);
+
     tracing::info!("closing application");
     application::close(state_to_close).await;
 
