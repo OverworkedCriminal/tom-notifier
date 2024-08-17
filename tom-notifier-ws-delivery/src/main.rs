@@ -13,5 +13,7 @@ async fn main() -> anyhow::Result<()> {
 
     let env = ApplicationEnv::parse()?;
 
+    application::setup_tracing(&env)?;
+
     Ok(())
 }
