@@ -32,11 +32,10 @@ impl<B> MakeSpan<B> for MyMakeSpan {
     fn make_span(&mut self, request: &Request<B>) -> tracing::Span {
         let request_id = Uuid::new_v4();
         tracing::info_span!(
-            "request",
+            "Request",
             %request_id,
             method=%request.method(),
             uri = %request.uri(),
-            user_id = tracing::field::Empty
         )
     }
 }
