@@ -1,5 +1,5 @@
 use crate::{
-    application::ApplicationState,
+    application::{ApplicationMiddleware, ApplicationState},
     dto::{input, output},
     error::Error,
 };
@@ -12,10 +12,11 @@ use axum::{
 };
 use uuid::Uuid;
 
-pub fn routing() -> Router<ApplicationState> {
+pub fn routing(application_middleware: &ApplicationMiddleware) -> Router<ApplicationState> {
     Router::new()
         .route("/api/v1/ticket", get(get_ticket))
         .route("/api/v1/connection/:user_id", delete(delete_connection))
+        .route_layer(application_middleware.auth.clone())
         .route("/ws/v1", get(websocket_upgrade))
 }
 

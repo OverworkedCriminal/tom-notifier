@@ -6,5 +6,7 @@ pub fn create_application(
     application_state: ApplicationState,
     application_middleware: ApplicationMiddleware,
 ) -> Router {
-    routing().with_state(application_state)
+    routing(&application_middleware)
+        .with_state(application_state)
+        .layer(application_middleware.trace)
 }
