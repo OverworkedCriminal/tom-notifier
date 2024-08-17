@@ -1,3 +1,5 @@
-pub mod jwt_auth_future;
-pub mod jwt_auth_layer;
-pub mod jwt_auth_service;
+mod jwt_auth_future;
+mod jwt_auth_layer;
+mod jwt_auth_service;
+
+pub use jwt_auth_layer::JwtAuthLayer;

@@ -1,5 +1,6 @@
 mod dto;
-mod middleware;
+pub mod error;
+pub mod functions;
+pub mod middleware;
 
 pub use dto::User;
-pub use middleware::jwt_auth_layer::JwtAuthLayer;
