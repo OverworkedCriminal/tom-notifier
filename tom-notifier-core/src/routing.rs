@@ -1,6 +1,6 @@
 use crate::{
     application::ApplicationState,
-    auth::{require_all_roles, Role, User},
+    auth::Role,
     dto::{input, output},
     error::Error,
     service::notifications_service::NotificationsService,
@@ -12,6 +12,7 @@ use axum::{
     Extension, Json, Router,
 };
 use bson::oid::ObjectId;
+use jwt_auth::{functions::require_all_roles, User};
 use std::sync::Arc;
 
 pub fn routing() -> Router<ApplicationState> {
@@ -56,7 +57,7 @@ async fn post_notifications_undelivered(
     Extension(user): Extension<User>,
     Json(notification): Json<input::Notification>,
 ) -> Result<(StatusCode, Json<output::NotificationId>), Error> {
-    require_all_roles(&user, &[Role::ProduceNotifications])?;
+    require_all_roles(&user, &[Role::ProduceNotifications.as_ref()])?;
 
     let notification_id = notifications_service
         .save_notification(user.id, notification.into())
@@ -108,7 +109,7 @@ async fn put_notifications_undelivered_invalidate_at(
     Path(id): Path<ObjectId>,
     Json(invalidate_at): Json<input::NotificationInvalidateAt>,
 ) -> Result<StatusCode, Error> {
-    require_all_roles(&user, &[Role::ProduceNotifications])?;
+    require_all_roles(&user, &[Role::ProduceNotifications.as_ref()])?;
 
     notifications_service
         .update_notification_invalidate_at(id, user.id, invalidate_at)

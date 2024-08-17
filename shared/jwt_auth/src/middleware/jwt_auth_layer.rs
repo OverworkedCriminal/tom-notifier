@@ -32,7 +32,7 @@ impl<S> Layer<S> for JwtAuthLayer {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::auth::dto::User;
+    use crate::User;
     use axum::{
         body::Body,
         http::{header::AUTHORIZATION, HeaderValue, Method, Request, StatusCode},

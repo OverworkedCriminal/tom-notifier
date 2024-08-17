@@ -1,6 +1,6 @@
 use super::ApplicationEnv;
-use crate::auth::JwtAuthLayer;
 use axum::http::Request;
+use jwt_auth::middleware::JwtAuthLayer;
 use tower_http::{
     classify::{ServerErrorsAsFailures, SharedClassifier},
     limit::RequestBodyLimitLayer,

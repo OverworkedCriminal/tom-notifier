@@ -1,5 +1,5 @@
 use super::jwt_auth_future::JwtAuthFuture;
-use crate::auth::dto::{JwtClaims, User};
+use crate::{dto::Claims, User};
 use anyhow::anyhow;
 use axum::{
     extract::Request,
@@ -47,7 +47,7 @@ impl<S> JwtAuthService<S> {
         let Some(token) = authorization_value.get("Bearer ".len()..) else {
             return Err(anyhow!("invalid jwt"));
         };
-        let token_data = jsonwebtoken::decode::<JwtClaims>(token, &self.key, &self.validation)
+        let token_data = jsonwebtoken::decode::<Claims>(token, &self.key, &self.validation)
             .map_err(|err| anyhow!("invalid jwt: {err}"))?;
 
         Ok(User::new(
@@ -75,7 +75,7 @@ where
         match self.parse_authorization_header(authorization_header) {
             Ok(user) => {
                 // crate span that holds user information
-                let span = tracing::info_span!("user", id = %user.id);
+                let span = tracing::info_span!("User", id = %user.id);
 
                 req.extensions_mut().insert(user);
 

@@ -2,7 +2,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
-pub struct JwtClaims {
+pub struct Claims {
     pub sub: Uuid,
     pub realm_access: JwtClaimsRealmAccess,
 }
