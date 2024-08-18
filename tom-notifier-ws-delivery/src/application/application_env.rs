@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use jsonwebtoken::{Algorithm, DecodingKey};
 use jwt_auth::util::{parse_jwt_algorithms, parse_jwt_key};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 pub struct ApplicationEnv {
     pub log_directory: String,
@@ -11,6 +11,8 @@ pub struct ApplicationEnv {
 
     pub db_connection_string: String,
     pub db_name: String,
+
+    pub websocket_ticket_lifespan: Duration,
 
     /// Algorithms must belong to the same family
     pub jwt_algorithms: Vec<Algorithm>,
@@ -24,6 +26,9 @@ impl ApplicationEnv {
         let bind_address = Self::env_var("TOM_NOTIFIER_WS_DELIVERY_BIND_ADDRESS")?.parse()?;
         let db_connection_string = Self::env_var("TOM_NOTIFIER_WS_DELIVERY_DB_CONNECTION_STRING")?;
         let db_name = Self::env_var("TOM_NOTIFIER_WS_DELIVERY_DB_NAME")?;
+        let websocket_ticket_lifespan =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_WEBSOCKET_TICKET_LIFESPAN")?.parse()?;
+        let websocket_ticket_lifespan = Duration::from_secs(websocket_ticket_lifespan);
         let jwt_algorithms =
             parse_jwt_algorithms(Self::env_var("TOM_NOTIFIER_WS_DELIVERY_JWT_ALGORITHMS")?)?;
         let jwt_algorithm = jwt_algorithms.first().ok_or(anyhow!(
@@ -40,6 +45,7 @@ impl ApplicationEnv {
             bind_address,
             db_connection_string,
             db_name,
+            websocket_ticket_lifespan,
             jwt_algorithms,
             jwt_key,
         })

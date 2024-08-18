@@ -3,15 +3,17 @@ use crate::{
     auth::Role,
     dto::{input, output},
     error::Error,
+    service::tickets_service::TicketsSerivce,
 };
 use axum::{
-    extract::{Path, Query, WebSocketUpgrade},
+    extract::{Path, Query, State, WebSocketUpgrade},
     http::StatusCode,
     response::Response,
     routing::{delete, get},
     Extension, Json, Router,
 };
 use jwt_auth::{functions::require_all_roles, User};
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn routing(application_middleware: &ApplicationMiddleware) -> Router<ApplicationState> {
@@ -22,10 +24,18 @@ pub fn routing(application_middleware: &ApplicationMiddleware) -> Router<Applica
         .route("/ws/v1", get(websocket_upgrade))
 }
 
+///
+/// Create ticket that can be used to establish WebSocket connection with the server
+///
+/// ### Returns
+/// 200 on success
+///
 async fn get_ticket(
+    State(tickets_service): State<Arc<dyn TicketsSerivce>>,
     Extension(user): Extension<User>,
 ) -> Result<(StatusCode, Json<output::WebSocketTicket>), Error> {
-    todo!("not implemented")
+    let ticket = tickets_service.create_ticket(user.id).await?;
+    Ok((StatusCode::OK, Json(ticket)))
 }
 
 async fn delete_connection(
@@ -46,11 +56,15 @@ async fn websocket_upgrade(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::application::{self, ApplicationEnv};
+    use crate::{
+        application::{self, ApplicationEnv},
+        repository,
+        service::tickets_service::MockTicketsSerivce,
+    };
     use axum::{body::Body, http::Request};
     use http::{header::AUTHORIZATION, Method};
     use jwt_auth::test::create_jwt;
-    use std::sync::Once;
+    use std::sync::{Arc, Once};
     use tower::ServiceExt;
 
     static BEFORE_ALL: Once = Once::new();
@@ -60,7 +74,9 @@ mod test {
     }
 
     fn mock_application_state() -> ApplicationState {
-        ApplicationState {}
+        ApplicationState {
+            tickets_service: Arc::new(MockTicketsSerivce::new()),
+        }
     }
 
     fn routing() -> Router<ApplicationState> {
@@ -77,6 +93,66 @@ mod test {
         let jwt = create_jwt(Uuid::new_v4(), &[], jwt_algorithms, jwt_key);
 
         format!("Bearer {jwt}")
+    }
+
+    #[tokio::test]
+    async fn get_ticket_200() {
+        BEFORE_ALL.call_once(init_env_variables);
+
+        let mut tickets_service = MockTicketsSerivce::new();
+        tickets_service.expect_create_ticket().returning(|_| {
+            Ok(output::WebSocketTicket {
+                ticket: "some ticket".to_string(),
+            })
+        });
+
+        let mut application_state = mock_application_state();
+        application_state.tickets_service = Arc::new(tickets_service);
+
+        let response = routing()
+            .with_state(application_state)
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/ticket")
+                    .header(AUTHORIZATION, create_user_bearer())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_ticket_database_error() {
+        BEFORE_ALL.call_once(init_env_variables);
+
+        let mut tickets_service = MockTicketsSerivce::new();
+        tickets_service.expect_create_ticket().returning(|_| {
+            Err(Error::Database(repository::Error::Mongo(
+                mongodb::error::ErrorKind::Custom(Arc::new("any database error")).into(),
+            )))
+        });
+
+        let mut application_state = mock_application_state();
+        application_state.tickets_service = Arc::new(tickets_service);
+
+        let response = routing()
+            .with_state(application_state)
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/api/v1/ticket")
+                    .header(AUTHORIZATION, create_user_bearer())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]

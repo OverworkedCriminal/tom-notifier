@@ -4,6 +4,7 @@ mod dto;
 mod error;
 mod repository;
 mod routing;
+mod service;
 
 use application::ApplicationEnv;
 
