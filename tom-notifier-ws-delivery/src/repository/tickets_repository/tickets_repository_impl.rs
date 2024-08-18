@@ -60,6 +60,14 @@ impl TicketsRepositoryImpl {
 
 #[async_trait]
 impl TicketsRepository for TicketsRepositoryImpl {
+    ///
+    /// Inserts ticket
+    ///
+    /// ### Returns
+    /// Id of inserted ticket
+    /// ### Errors
+    /// - [Error::InsertUniqueViolation] when ticket is not unique
+    ///
     async fn insert(
         &self,
         ticket: &str,
@@ -104,6 +112,13 @@ impl TicketsRepository for TicketsRepositoryImpl {
         }
     }
 
+    ///
+    /// Finds a ticket and user information
+    ///
+    /// ### Returns
+    /// - None when there's no such ticket
+    /// - [Ticket] with user information
+    ///
     async fn find(&self, ticket: &str) -> Result<Option<Ticket>, repository::Error> {
         let entity = self
             .database
@@ -117,6 +132,14 @@ impl TicketsRepository for TicketsRepositoryImpl {
         Ok(entity)
     }
 
+    ///
+    /// Updates used_at property of the ticket
+    ///
+    /// ### Errors
+    /// - [Error::NoDocumentUpdated] when
+    ///     - there's no ticket with such Id
+    ///     - ticket's used_at is already set
+    ///
     async fn update_used_at(
         &self,
         id: ObjectId,
