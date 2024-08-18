@@ -2,6 +2,7 @@ mod application;
 mod auth;
 mod dto;
 mod error;
+mod repository;
 mod routing;
 
 use application::ApplicationEnv;
