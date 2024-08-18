@@ -10,6 +10,7 @@ dotenvy = "0.15.7"
 jsonwebtoken = "9.3.0"
 jwt_auth = { version = "0.1.0", path = "../shared/jwt_auth" }
 serde = { version = "1.0.208", features = ["derive"] }
+strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"
 tokio = { version = "1.39.2", features = ["full"] }
 tower-http = { version = "0.5.2", features = ["trace"] }
@@ -19,4 +20,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.10.0", features = ["serde", "v4"] }
 
 [dev-dependencies]
+http = "1.1.0"
+jwt_auth = { path = "../shared/jwt_auth", features = ["test_utils"] }
 reqwest = "0.12.5"
+tower = { version = "0.5.0", features = ["util"] }
