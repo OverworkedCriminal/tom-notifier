@@ -6,14 +6,14 @@ use crate::{
     service::tickets_service::TicketsSerivce,
 };
 use axum::{
-    extract::{Path, Query, State, WebSocketUpgrade},
+    extract::{ConnectInfo, Path, Query, State, WebSocketUpgrade},
     http::StatusCode,
     response::Response,
     routing::{delete, get},
     Extension, Json, Router,
 };
 use jwt_auth::{functions::require_all_roles, User};
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use uuid::Uuid;
 
 pub fn routing(application_middleware: &ApplicationMiddleware) -> Router<ApplicationState> {
@@ -46,10 +46,23 @@ async fn delete_connection(
     todo!("not implemented")
 }
 
+///
+/// Start WebSocket connection
+///
+/// ### Errors
+/// - 401 when
+///     - ticket does not exist
+///     - ticket has already been used
+///     - ticket has expired
+///
 async fn websocket_upgrade(
+    State(tickets_service): State<Arc<dyn TicketsSerivce>>,
+    ConnectInfo(address): ConnectInfo<SocketAddr>,
     Query(ticket): Query<input::WebSocketTicket>,
     ws: WebSocketUpgrade,
 ) -> Result<Response, Error> {
+    let ticket = tickets_service.consume_ticket(ticket).await?;
+
     todo!("not implemented")
 }
 
@@ -64,7 +77,12 @@ mod test {
     use axum::{body::Body, http::Request};
     use http::{header::AUTHORIZATION, Method};
     use jwt_auth::test::create_jwt;
-    use std::sync::{Arc, Once};
+    use std::{
+        future::IntoFuture,
+        net::{Ipv4Addr, SocketAddr},
+        sync::{Arc, Once},
+    };
+    use tokio::{net::TcpListener, sync::Notify};
     use tower::ServiceExt;
 
     static BEFORE_ALL: Once = Once::new();
@@ -175,5 +193,91 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn websocket_upgrade_ticket_invalid() {
+        let mut tickets_service = MockTicketsSerivce::new();
+        tickets_service
+            .expect_consume_ticket()
+            .returning(|_| Err(Error::TicketInvalid("ticket is invalid")));
+
+        let mut application_state = mock_application_state();
+        application_state.tickets_service = Arc::new(tickets_service);
+
+        let app = routing()
+            .with_state(application_state)
+            .into_make_service_with_connect_info::<SocketAddr>();
+
+        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let shutdown_notify = Arc::new(Notify::new());
+        let shutdown_notify_clone = Arc::clone(&shutdown_notify);
+
+        let server_handle = tokio::spawn(
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move { shutdown_notify_clone.notified().await })
+                .into_future(),
+        );
+
+        let connect_err = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/ws/v1?ticket=anystringwilldohere"
+        ))
+        .await
+        .unwrap_err();
+        let tokio_tungstenite::tungstenite::Error::Http(response) = connect_err else {
+            panic!("unexpected error");
+        };
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        shutdown_notify.notify_one();
+        server_handle.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn websocket_upgrade_ticket_consume_database_error() {
+        let mut tickets_service = MockTicketsSerivce::new();
+        tickets_service.expect_consume_ticket().returning(|_| {
+            Err(Error::Database(repository::Error::Mongo(
+                mongodb::error::ErrorKind::Custom(Arc::new("any database error")).into(),
+            )))
+        });
+
+        let mut application_state = mock_application_state();
+        application_state.tickets_service = Arc::new(tickets_service);
+
+        let app = routing()
+            .with_state(application_state)
+            .into_make_service_with_connect_info::<SocketAddr>();
+
+        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let shutdown_notify = Arc::new(Notify::new());
+        let shutdown_notify_clone = Arc::clone(&shutdown_notify);
+
+        let server_handle = tokio::spawn(
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move { shutdown_notify_clone.notified().await })
+                .into_future(),
+        );
+
+        let connect_err = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/ws/v1?ticket=anystringwilldohere"
+        ))
+        .await
+        .unwrap_err();
+        let tokio_tungstenite::tungstenite::Error::Http(response) = connect_err else {
+            panic!("unexpected error");
+        };
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        shutdown_notify.notify_one();
+        server_handle.await.unwrap().unwrap();
     }
 }
