@@ -1,3 +1,3 @@
-mod roles;
+mod role;
 
-pub use roles::*;
+pub use role::*;
