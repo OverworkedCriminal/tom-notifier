@@ -32,6 +32,11 @@ impl TicketsRepositoryImpl {
         let index_names = collection.list_index_names().await?;
 
         if !index_names.contains(&INDEX_NAME_UNIQUE_TICKET.to_string()) {
+            tracing::debug!(
+                collection = TICKETS,
+                index = INDEX_NAME_UNIQUE_TICKET,
+                "creating index"
+            );
             collection
                 .create_index(
                     IndexModel::builder()
@@ -47,11 +52,6 @@ impl TicketsRepositoryImpl {
                         .build(),
                 )
                 .await?;
-            tracing::debug!(
-                collection = TICKETS,
-                index = INDEX_NAME_UNIQUE_TICKET,
-                "created index"
-            );
         }
 
         Ok(Self { database })
