@@ -9,6 +9,7 @@ fn main() {
             &[
                 "../shared/protobuf/notification.proto",
                 "../shared/protobuf/confirmation.proto",
+                "../shared/protobuf/rabbitmq_notification.proto",
             ],
             &["../shared/protobuf/"],
         )

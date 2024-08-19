@@ -1,6 +1,6 @@
 use super::{dto::Confirmation, ConfirmationsConsumerServiceConfig};
 use crate::{
-    dto::protobuf::confirmation::ConfirmationProtobuf,
+    dto::input,
     repository::{self, NotificationsRepository},
 };
 use amqprs::{
@@ -66,7 +66,7 @@ struct Consumer {
 
 impl Consumer {
     async fn try_consume(&self, content: Vec<u8>) -> anyhow::Result<()> {
-        let message = ConfirmationProtobuf::decode(content.as_slice())
+        let message = input::ConfirmationProtobuf::decode(content.as_slice())
             .map_err(|err| anyhow!("invalid confirmation: {err}"))?;
 
         let id_str = message.id.clone();
