@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package websocket_notification;
+
+import "notification.proto";
+
+enum NetworkStatusProtobuf {
+    OK = 0;
+    ERROR = 1;
+}
+
+/*
+ * Message always contains 'network_status'.
+ *
+ * In general case user receive 'network_status' OK with non null notification.
+ * Notification contains information about state change.
+ *
+ * In rare cases when communication between ws-delivery and RabbitMQ fails
+ * user will receive 'network_status' ERROR and 'notification' NULL.
+ * At this point user should start fetching new notifications using long polling.
+ *
+ * When communication between ws-delivery and RabbitMQ is restored
+ * user will receive 'network_status' OK and 'notification' NULL.
+ * At this point user should fetch new notifications one more time and after that
+ * he can rely again on websocket connection
+ *
+ */
+message WebSocketNotificationProtobuf {
+    NetworkStatusProtobuf network_status = 1;
+    optional notification.NotificationProtobuf notification = 2;
+}

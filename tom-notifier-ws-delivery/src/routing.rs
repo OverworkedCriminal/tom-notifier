@@ -3,7 +3,7 @@ use crate::{
     auth::Role,
     dto::{input, output},
     error::Error,
-    service::tickets_service::TicketsSerivce,
+    service::{tickets_service::TicketsSerivce, websockets_service::WebSocketsService},
 };
 use axum::{
     extract::{ConnectInfo, Path, Query, State, WebSocketUpgrade},
@@ -38,12 +38,24 @@ async fn get_ticket(
     Ok((StatusCode::OK, Json(ticket)))
 }
 
+///
+/// Close all connections bound to passed user_id
+///
+/// ### Returns
+/// 204 on success
+///
+/// ### Errors
+/// - 403 when
+///     - user using this endpoint lacks role [Role::Admin]
+///
 async fn delete_connection(
+    State(websockets_service): State<Arc<dyn WebSocketsService>>,
     Extension(user): Extension<User>,
     Path(user_id): Path<Uuid>,
 ) -> Result<StatusCode, Error> {
     require_all_roles(&user, &[Role::Admin.as_ref()])?;
-    todo!("not implemented")
+    websockets_service.close_connections(user_id).await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 ///
@@ -57,13 +69,18 @@ async fn delete_connection(
 ///
 async fn websocket_upgrade(
     State(tickets_service): State<Arc<dyn TicketsSerivce>>,
+    State(websockets_service): State<Arc<dyn WebSocketsService>>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
     Query(ticket): Query<input::WebSocketTicket>,
-    ws: WebSocketUpgrade,
+    websocket_upgrade: WebSocketUpgrade,
 ) -> Result<Response, Error> {
     let ticket = tickets_service.consume_ticket(ticket).await?;
-
-    todo!("not implemented")
+    let response = websocket_upgrade.on_upgrade(move |websocket| async move {
+        websockets_service
+            .handle_client(ticket.user_id, address, websocket)
+            .await;
+    });
+    Ok(response)
 }
 
 #[cfg(test)]
@@ -72,7 +89,7 @@ mod test {
     use crate::{
         application::{self, ApplicationEnv},
         repository,
-        service::tickets_service::MockTicketsSerivce,
+        service::{tickets_service::MockTicketsSerivce, websockets_service::MockWebSocketsService},
     };
     use axum::{body::Body, http::Request};
     use http::{header::AUTHORIZATION, Method};
@@ -94,6 +111,7 @@ mod test {
     fn mock_application_state() -> ApplicationState {
         ApplicationState {
             tickets_service: Arc::new(MockTicketsSerivce::new()),
+            websockets_service: Arc::new(MockWebSocketsService::new()),
         }
     }
 
@@ -105,10 +123,18 @@ mod test {
     }
 
     fn create_user_bearer() -> String {
+        create_bearer(&[])
+    }
+
+    fn create_admin_bearer() -> String {
+        create_bearer(&[Role::Admin.as_ref()])
+    }
+
+    fn create_bearer(roles: &[&str]) -> String {
         let jwt_algorithms = std::env::var("TOM_NOTIFIER_WS_DELIVERY_JWT_ALGORITHMS").unwrap();
         let jwt_key = std::env::var("TOM_NOTIFIER_WS_DELIVERY_JWT_TEST_ENCODE_KEY").unwrap();
 
-        let jwt = create_jwt(Uuid::new_v4(), &[], jwt_algorithms, jwt_key);
+        let jwt = create_jwt(Uuid::new_v4(), roles, jwt_algorithms, jwt_key);
 
         format!("Bearer {jwt}")
     }
@@ -193,6 +219,33 @@ mod test {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn delete_connection_204() {
+        BEFORE_ALL.call_once(init_env_variables);
+
+        let mut websockets_service = MockWebSocketsService::new();
+        websockets_service
+            .expect_close_connections()
+            .returning(|_| ());
+        let mut application_state = mock_application_state();
+        application_state.websockets_service = Arc::new(websockets_service);
+
+        let response = routing()
+            .with_state(application_state)
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri(format!("/api/v1/connection/{}", Uuid::new_v4()))
+                    .header(AUTHORIZATION, create_admin_bearer())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]

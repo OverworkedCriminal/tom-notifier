@@ -1,7 +1,10 @@
 use super::ApplicationEnv;
 use crate::{
     repository::TicketsRepositoryImpl,
-    service::tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
+    service::{
+        tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
+        websockets_service::{WebSocketsService, WebSocketsServiceImpl},
+    },
 };
 use axum::extract::FromRef;
 use mongodb::{options::ClientOptions, Client};
@@ -10,6 +13,7 @@ use std::sync::Arc;
 #[derive(Clone, FromRef)]
 pub struct ApplicationState {
     pub tickets_service: Arc<dyn TicketsSerivce>,
+    pub websockets_service: Arc<dyn WebSocketsService>,
 }
 
 pub struct ApplicationStateToClose {
@@ -35,8 +39,14 @@ pub async fn create_state(
     let tickets_service = TicketsServiceImpl::new(config, tickets_repository);
     let tickets_service = Arc::new(tickets_service);
 
+    let websockets_service = WebSocketsServiceImpl::new();
+    let websockets_service = Arc::new(websockets_service); 
+
     Ok((
-        ApplicationState { tickets_service },
+        ApplicationState {
+            tickets_service,
+            websockets_service,
+        },
         ApplicationStateToClose { db_client },
     ))
 }

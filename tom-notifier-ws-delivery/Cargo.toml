@@ -12,6 +12,8 @@ jsonwebtoken = "9.3.0"
 jwt_auth = { version = "0.1.0", path = "../shared/jwt_auth" }
 mockall = "0.13.0"
 mongodb = "3.0.1"
+prost = "0.13.1"
+prost-types = "0.13.1"
 serde = { version = "1.0.208", features = ["derive"] }
 strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"
@@ -29,3 +31,6 @@ jwt_auth = { path = "../shared/jwt_auth", features = ["test_utils"] }
 reqwest = "0.12.5"
 tokio-tungstenite = "0.23.1"
 tower = { version = "0.5.0", features = ["util"] }
+
+[build-dependencies]
+prost-build = "0.13.1"
