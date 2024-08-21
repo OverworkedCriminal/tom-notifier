@@ -1,6 +1,16 @@
 use super::ApplicationStateToClose;
+use std::sync::Arc;
 
 pub async fn close(state: ApplicationStateToClose) {
+    tracing::info!("closing rabbimq confirmations service");
+    match Arc::try_unwrap(state.rabbitmq_confirmations_service) {
+        Ok(confirmations_service) => confirmations_service.close().await,
+        Err(_) => tracing::error!("cannot close rabbitmq confirmations service"),
+    }
+
+    tracing::info!("closing rabbitmq connection");
+    state.rabbitmq_connection.close().await;
+
     tracing::info!("closing connection with database");
     state.db_client.shutdown().await;
 }

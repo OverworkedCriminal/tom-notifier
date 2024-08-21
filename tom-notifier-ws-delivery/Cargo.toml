@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+amqprs = { version = "1.7.0", features = ["urispec"] }
 anyhow = "1.0.86"
 axum = { version = "0.7.5", features = ["macros", "ws"] }
 bson = { version = "2.11.0", features = ["time-0_3", "uuid-1"] }
@@ -14,6 +15,7 @@ mockall = "0.13.0"
 mongodb = "3.0.1"
 prost = "0.13.1"
 prost-types = "0.13.1"
+rabbitmq_client = { version = "0.1.0", path = "../shared/rabbitmq_client" }
 serde = { version = "1.0.208", features = ["derive"] }
 strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"

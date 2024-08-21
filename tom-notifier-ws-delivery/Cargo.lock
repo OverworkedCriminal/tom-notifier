@@ -40,6 +40,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "amqp_serde"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "787581044ca08ad61cdb3a4e21afba087fb8cdba3bb3e23ce69a7d091808014d"
+dependencies = [
+ "bytes",
+ "serde",
+ "serde_bytes_ng",
+]
+
+[[package]]
+name = "amqprs"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4173302f657e24f1b914edc992549077ec7f4971599e1aea42a01b17eb6e079"
+dependencies = [
+ "amqp_serde",
+ "async-trait",
+ "bytes",
+ "serde",
+ "serde_bytes",
+ "tokio",
+ "uriparse",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1527,6 +1553,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rabbitmq_client"
+version = "0.1.0"
+dependencies = [
+ "amqprs",
+ "anyhow",
+ "async-trait",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1896,6 +1933,15 @@ name = "serde_bytes"
 version = "0.11.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "387cc504cb06bb40a96c8e04e951fe01854cf6bc921053c954e4a606d9675c6a"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_bytes_ng"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdb0ebce8684e2253f964e8b6ce51f0ccc6666bbb448fb4a6788088bda6544b6"
 dependencies = [
  "serde",
 ]
@@ -2377,6 +2423,7 @@ dependencies = [
 name = "tom-notifier-ws-delivery"
 version = "0.1.0"
 dependencies = [
+ "amqprs",
  "anyhow",
  "axum",
  "bson",
@@ -2389,6 +2436,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-types",
+ "rabbitmq_client",
  "reqwest",
  "serde",
  "strum",
@@ -2674,6 +2722,16 @@ name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+
+[[package]]
+name = "uriparse"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0200d0fc04d809396c2ad43f3c95da3582a2556eba8d453c1087f4120ee352ff"
+dependencies = [
+ "fnv",
+ "lazy_static",
+]
 
 [[package]]
 name = "url"

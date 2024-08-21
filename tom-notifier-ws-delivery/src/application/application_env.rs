@@ -17,6 +17,10 @@ pub struct ApplicationEnv {
     /// Algorithms must belong to the same family
     pub jwt_algorithms: Vec<Algorithm>,
     pub jwt_key: DecodingKey,
+
+    pub rabbitmq_connection_string: String,
+    pub rabbitmq_confirmations_exchange_name: String,
+    pub rabbitmq_retry_interval: Duration,
 }
 
 impl ApplicationEnv {
@@ -38,6 +42,13 @@ impl ApplicationEnv {
             jwt_algorithm,
             Self::env_var("TOM_NOTIFIER_WS_DELIVERY_JWT_KEY")?,
         )?;
+        let rabbitmq_connection_string =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING")?;
+        let rabbitmq_confirmations_exchange_name =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME")?;
+        let rabbitmq_retry_interval =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_RETRY_INTERVAL")?.parse()?;
+        let rabbitmq_retry_interval = Duration::from_secs(rabbitmq_retry_interval);
 
         Ok(Self {
             log_directory,
@@ -48,6 +59,9 @@ impl ApplicationEnv {
             websocket_ticket_lifespan,
             jwt_algorithms,
             jwt_key,
+            rabbitmq_connection_string,
+            rabbitmq_confirmations_exchange_name,
+            rabbitmq_retry_interval,
         })
     }
 
