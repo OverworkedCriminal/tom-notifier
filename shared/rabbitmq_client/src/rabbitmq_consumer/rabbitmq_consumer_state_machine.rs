@@ -1,3 +1,4 @@
+use super::dto::RabbitmqConsumerStatus;
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
     retry::retry, RabbitmqConnection,
@@ -28,6 +29,7 @@ pub struct RabbitmqConsumerStateMachine<Consumer> {
     consumer: Consumer,
 
     consumer_cancelled: Arc<Notify>,
+    status_tx: watch::Sender<RabbitmqConsumerStatus>,
 
     state: State,
 }
@@ -47,6 +49,7 @@ where
         basic_consume_args: BasicConsumeArguments,
         consumer: Consumer,
         consumer_cancelled: Arc<Notify>,
+        consumer_status_tx: watch::Sender<RabbitmqConsumerStatus>,
     ) -> Self {
         Self {
             rabbitmq_connection,
@@ -59,6 +62,7 @@ where
             basic_consume_args,
             consumer,
             consumer_cancelled,
+            status_tx: consumer_status_tx,
             state: State::Ok,
         }
     }
@@ -119,8 +123,9 @@ where
     }
 
     async fn ok_state(&mut self) {
-        // TODO: notify user that consumer is working
-        
+        self.status_tx
+            .send_replace(RabbitmqConsumerStatus::Consuming);
+
         tokio::select! {
             biased;
 
@@ -134,7 +139,8 @@ where
             }
         }
 
-        // TODO: notify user that consumer is NOT working
+        self.status_tx
+            .send_replace(RabbitmqConsumerStatus::Recovering);
     }
 
     async fn waiting_for_connection_state(&mut self) {
