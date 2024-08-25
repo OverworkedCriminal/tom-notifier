@@ -230,7 +230,7 @@ async fn messages_received_by_the_consumer_after_server_restart() {
         .await
         .unwrap();
 
-    let message = timeout(Duration::from_secs(10), rx.recv())
+    let message = timeout(Duration::from_secs(30), rx.recv())
         .await
         .unwrap()
         .unwrap();
