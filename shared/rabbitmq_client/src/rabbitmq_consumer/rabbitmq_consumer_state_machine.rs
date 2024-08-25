@@ -84,7 +84,7 @@ where
 
             _ = stop.notified() => {
                 tracing::info!("cancelling consumer");
-                let args = BasicCancelArguments::new(""); // TODO: set consumer_tag
+                let args = BasicCancelArguments::new(&self.basic_consume_args.consumer_tag);
                 match self.channel.basic_cancel(args).await {
                     Ok(_) => tracing::info!("consumer cancelled"),
                     Err(err) => tracing::warn!(%err, "cancelling consumer failed"),
