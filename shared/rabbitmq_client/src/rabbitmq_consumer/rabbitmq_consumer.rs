@@ -115,7 +115,7 @@ impl RabbitmqConsumer {
         tracing::info!("consumer closed");
     }
 
-    pub fn state(&self) -> watch::Receiver<RabbitmqConsumerStatus> {
+    pub fn status(&self) -> watch::Receiver<RabbitmqConsumerStatus> {
         self.status_rx.clone()
     }
 }
