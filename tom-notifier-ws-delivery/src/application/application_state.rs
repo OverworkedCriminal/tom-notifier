@@ -44,9 +44,6 @@ pub async fn create_state(
     let tickets_service = TicketsServiceImpl::new(config, tickets_repository);
     let tickets_service = Arc::new(tickets_service);
 
-    let websockets_service = WebSocketsServiceImpl::new();
-    let websockets_service = Arc::new(websockets_service);
-
     let config = RabbitmqConnectionConfig {
         retry_interval: env.rabbitmq_retry_interval,
     };
@@ -60,6 +57,9 @@ pub async fn create_state(
     let rabbitmq_confirmations_service =
         ConfirmationsServiceImpl::new(config, rabbitmq_connection.clone()).await?;
     let rabbitmq_confirmations_service = Arc::new(rabbitmq_confirmations_service);
+
+    let websockets_service = WebSocketsServiceImpl::new(rabbitmq_confirmations_service.clone());
+    let websockets_service = Arc::new(websockets_service);
 
     Ok((
         ApplicationState {

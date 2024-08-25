@@ -11,7 +11,7 @@ enum NotificationStatusProtobuf {
 }
 
 /*
- * Message always contains 'user_ids', 'id', 'status', 'timestamp'.
+ * Message always contains 'id', 'status', 'timestamp'.
  *
  * - when 'status' is NEW it also contains all optional fields
  * - when 'status' is UPDATED it also contains 'seen' optional field

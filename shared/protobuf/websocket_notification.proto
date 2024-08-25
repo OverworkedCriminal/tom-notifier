@@ -10,7 +10,7 @@ enum NetworkStatusProtobuf {
 }
 
 /*
- * Message always contains 'network_status'.
+ * Message always contains 'message_id' and 'network_status'.
  *
  * In general case user receive 'network_status' OK with non null notification.
  * Notification contains information about state change.
@@ -26,6 +26,10 @@ enum NetworkStatusProtobuf {
  *
  */
 message WebSocketNotificationProtobuf {
-    NetworkStatusProtobuf network_status = 1;
-    optional notification.NotificationProtobuf notification = 2;
+
+    // used to confirm receipt of the websocket message
+    string message_id = 1;
+
+    NetworkStatusProtobuf network_status = 2;
+    optional notification.NotificationProtobuf notification = 3;
 }

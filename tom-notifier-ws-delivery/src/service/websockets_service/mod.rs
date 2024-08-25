@@ -1,3 +1,4 @@
+mod dto;
 mod websockets_service;
 mod websockets_service_impl;
 
