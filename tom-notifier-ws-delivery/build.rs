@@ -11,6 +11,7 @@ fn main() {
                 "../shared/protobuf/confirmation.proto",
                 "../shared/protobuf/rabbitmq_notification.proto",
                 "../shared/protobuf/websocket_notification.proto",
+                "../shared/protobuf/websocket_confirmation.proto",
             ],
             &["../shared/protobuf/"],
         )

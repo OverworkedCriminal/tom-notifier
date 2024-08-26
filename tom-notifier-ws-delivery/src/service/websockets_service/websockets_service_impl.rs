@@ -1,62 +1,65 @@
-use super::{dto::Message, WebSocketsService};
+use super::{
+    dto::{WebSocketMessage, WebSocketsServiceConfig},
+    websocket_confirmation_callback::WebSocketConfirmationCallback,
+    WebSocketsService,
+};
 use crate::{
     dto::{input::NotificationStatusProtobuf, output},
-    service::confirmations_service::ConfirmationsService,
+    service::{
+        confirmations_service::ConfirmationsService,
+        websockets_service::websocket_connection::WebSocketConnection,
+    },
 };
 use axum::{async_trait, extract::ws::WebSocket};
+use futures::StreamExt;
 use prost::Message as ProstMessage;
-use std::{collections::HashMap, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 pub struct WebSocketsServiceImpl {
-    users_connections: Arc<RwLock<HashMap<Uuid, broadcast::Sender<Arc<Message>>>>>,
+    config: Arc<WebSocketsServiceConfig>,
+
+    users_connections: Arc<RwLock<HashMap<Uuid, broadcast::Sender<Arc<WebSocketMessage>>>>>,
 
     confirmations_service: Arc<dyn ConfirmationsService>,
 }
 
 impl WebSocketsServiceImpl {
-    pub fn new(confirmations_service: Arc<dyn ConfirmationsService>) -> Self {
+    pub fn new(
+        config: WebSocketsServiceConfig,
+        confirmations_service: Arc<dyn ConfirmationsService>,
+    ) -> Self {
         let users_connections = HashMap::new();
         let users_connections = RwLock::new(users_connections);
         let users_connections = Arc::new(users_connections);
 
         Self {
+            config: Arc::new(config),
             users_connections,
             confirmations_service,
         }
     }
 
-    fn create_message(&self, notification: output::NotificationProtobuf) -> Arc<Message> {
+    fn create_message(&self, notification: output::NotificationProtobuf) -> Arc<WebSocketMessage> {
         let message_id = Uuid::new_v4();
         let payload = notification.encode_to_vec();
-        let delivered_callback: Option<
-            Box<dyn FnOnce(Uuid) -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync>,
-        > = match notification.status() == NotificationStatusProtobuf::New {
-            true => {
-                let id = notification.id;
-                let confirmations_service = Arc::clone(&self.confirmations_service);
-                Some(Box::new(|user_id| {
-                    Box::pin(async move {
-                        let confirmation = output::ConfirmationProtobuf {
-                            id,
-                            user_id: user_id.to_string(),
-                        };
-                        confirmations_service.send(confirmation).await;
-                    })
-                }))
-            }
+        let delivered_callback = match notification.status() == NotificationStatusProtobuf::New {
+            true => Some(WebSocketConfirmationCallback::new(
+                Arc::clone(&self.confirmations_service),
+                notification.id,
+            )),
             false => None,
         };
 
-        Arc::new(Message {
+        Arc::new(WebSocketMessage {
             message_id,
             payload,
             delivered_callback,
         })
     }
 
-    async fn send_multicast(&self, user_ids: &[Uuid], message: Arc<Message>) {
+    async fn send_multicast(&self, user_ids: &[Uuid], message: Arc<WebSocketMessage>) {
         let connections = self.users_connections.read().await;
         user_ids
             .into_iter()
@@ -71,7 +74,7 @@ impl WebSocketsServiceImpl {
             });
     }
 
-    async fn send_broadcast(&self, message: Arc<Message>) {
+    async fn send_broadcast(&self, message: Arc<WebSocketMessage>) {
         let connections = self.users_connections.read().await;
         connections.iter().for_each(|(user_id, tx)| {
             let _ = tx.send(message.clone());
@@ -87,7 +90,67 @@ impl WebSocketsServiceImpl {
 #[async_trait]
 impl WebSocketsService for WebSocketsServiceImpl {
     async fn handle_client(&self, user_id: Uuid, address: SocketAddr, websocket: WebSocket) {
-        
+        let user_id_str = user_id.to_string();
+        let address_str = address.to_string();
+
+        tracing::info!(
+            user_id = user_id_str,
+            address = address_str,
+            "starting websocket connection",
+        );
+
+        // Find messages channel or create new one if necessary
+        let messages_rx = {
+            let mut connections_lock = self.users_connections.write().await;
+            match connections_lock.get_mut(&user_id) {
+                Some(messages_tx) => messages_tx.subscribe(),
+                None => {
+                    let (messages_tx, messages_rx) = tokio::sync::broadcast::channel(16);
+                    connections_lock.insert(user_id, messages_tx);
+                    tracing::trace!(user_id = user_id_str, "added user to connected_users");
+                    messages_rx
+                }
+            }
+        };
+
+        let (ws_tx, ws_rx) = websocket.split();
+
+        // Create connection
+        let connection = WebSocketConnection::new(
+            Arc::clone(&self.config),
+            user_id,
+            address,
+            messages_rx,
+            ws_tx,
+            ws_rx,
+        );
+
+        let users_connections = Arc::clone(&self.users_connections);
+
+        // Run connection
+        tokio::spawn(async move {
+            tracing::info!(
+                user_id = user_id_str,
+                address = address_str,
+                "websocket connection started"
+            );
+
+            connection.run().await;
+
+            let mut lock = users_connections.write().await;
+            if let Some(tx) = lock.get(&user_id) {
+                if tx.receiver_count() == 0 {
+                    lock.remove(&user_id);
+                    tracing::trace!(user_id = user_id_str, "removed user from user_connections");
+                }
+            }
+
+            tracing::info!(
+                user_id = user_id_str,
+                address = address_str,
+                "websocket connection finished"
+            );
+        });
     }
 
     async fn close_connections(&self, user_id: Uuid) {
@@ -226,8 +289,120 @@ mod test {
         assert!(t3.is_ok());
     }
 
+    #[tokio::test]
+    async fn send_new_callback_present() {
+        let service = create_service();
+        let user_id = Uuid::new_v4();
+
+        // simulate connection
+        let (tx, mut rx) = broadcast::channel(8);
+        {
+            let mut lock = service.users_connections.write().await;
+            lock.insert(user_id, tx);
+        }
+
+        let notification = output::NotificationProtobuf {
+            id: "any string should be okay".to_string(),
+            status: output::NotificationStatusProtobuf::New.into(),
+            timestamp: Some(Timestamp {
+                seconds: OffsetDateTime::now_utc().unix_timestamp(),
+                nanos: 0,
+            }),
+            created_by: Some("user".to_string()),
+            seen: Some(false),
+            content_type: Some("content type".to_string()),
+            content: Some(b"content".to_vec()),
+        };
+
+        service.send(&[user_id], notification).await;
+
+        let message = tokio::time::timeout(Duration::from_millis(100), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(message.delivered_callback.is_some());
+    }
+
+    #[tokio::test]
+    async fn send_updated_callback_not_present() {
+        let service = create_service();
+        let user_id = Uuid::new_v4();
+
+        // simulate connection
+        let (tx, mut rx) = broadcast::channel(8);
+        {
+            let mut lock = service.users_connections.write().await;
+            lock.insert(user_id, tx);
+        }
+
+        let notification = output::NotificationProtobuf {
+            id: "any string should be okay".to_string(),
+            status: output::NotificationStatusProtobuf::Updated.into(),
+            timestamp: Some(Timestamp {
+                seconds: OffsetDateTime::now_utc().unix_timestamp(),
+                nanos: 0,
+            }),
+            created_by: None,
+            seen: Some(true),
+            content_type: None,
+            content: None,
+        };
+
+        service.send(&[user_id], notification).await;
+
+        let message = tokio::time::timeout(Duration::from_millis(100), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(message.delivered_callback.is_none());
+    }
+
+    #[tokio::test]
+    async fn send_deleted_callback_not_present() {
+        let service = create_service();
+        let user_id = Uuid::new_v4();
+
+        // simulate connection
+        let (tx, mut rx) = broadcast::channel(8);
+        {
+            let mut lock = service.users_connections.write().await;
+            lock.insert(user_id, tx);
+        }
+
+        let notification = output::NotificationProtobuf {
+            id: "any string should be okay".to_string(),
+            status: output::NotificationStatusProtobuf::Deleted.into(),
+            timestamp: Some(Timestamp {
+                seconds: OffsetDateTime::now_utc().unix_timestamp(),
+                nanos: 0,
+            }),
+            created_by: None,
+            seen: None,
+            content_type: None,
+            content: None,
+        };
+
+        service.send(&[user_id], notification).await;
+
+        let message = tokio::time::timeout(Duration::from_millis(100), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(message.delivered_callback.is_none());
+    }
+
     fn create_service() -> WebSocketsServiceImpl {
-        WebSocketsServiceImpl::new(Arc::new(MockConfirmationsService::new()))
+        // config does not matter
+        let config = WebSocketsServiceConfig {
+            ping_interval: Duration::from_secs(600),
+            retry_max_count: 10,
+            retry_interval: Duration::from_secs(10),
+        };
+
+        WebSocketsServiceImpl::new(config, Arc::new(MockConfirmationsService::new()))
     }
 
     fn create_notification() -> output::NotificationProtobuf {

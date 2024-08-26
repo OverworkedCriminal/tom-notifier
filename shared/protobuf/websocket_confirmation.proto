@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package websocket_confirmation;
+
+message WebSocketConfirmationProtobuf {
+    string message_id = 1;
+}

@@ -4,7 +4,7 @@ use crate::{
     service::{
         confirmations_service::{ConfirmationsServiceConfig, ConfirmationsServiceImpl},
         tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
-        websockets_service::{WebSocketsService, WebSocketsServiceImpl},
+        websockets_service::{WebSocketsService, WebSocketsServiceConfig, WebSocketsServiceImpl},
     },
 };
 use amqprs::connection::OpenConnectionArguments;
@@ -58,7 +58,13 @@ pub async fn create_state(
         ConfirmationsServiceImpl::new(config, rabbitmq_connection.clone()).await?;
     let rabbitmq_confirmations_service = Arc::new(rabbitmq_confirmations_service);
 
-    let websockets_service = WebSocketsServiceImpl::new(rabbitmq_confirmations_service.clone());
+    let config = WebSocketsServiceConfig {
+        ping_interval: env.websocket_ping_interval,
+        retry_max_count: env.websocket_retry_max_count,
+        retry_interval: env.websocket_retry_interval,
+    };
+    let websockets_service =
+        WebSocketsServiceImpl::new(config, rabbitmq_confirmations_service.clone());
     let websockets_service = Arc::new(websockets_service);
 
     Ok((

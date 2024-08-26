@@ -9,6 +9,7 @@ anyhow = "1.0.86"
 axum = { version = "0.7.5", features = ["macros", "ws"] }
 bson = { version = "2.11.0", features = ["time-0_3", "uuid-1"] }
 dotenvy = "0.15.7"
+futures = "0.3.30"
 jsonwebtoken = "9.3.0"
 jwt_auth = { version = "0.1.0", path = "../shared/jwt_auth" }
 mockall = "0.13.0"
