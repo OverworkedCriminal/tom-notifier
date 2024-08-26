@@ -3,6 +3,9 @@ use crate::{
     repository::TicketsRepositoryImpl,
     service::{
         confirmations_service::{ConfirmationsServiceConfig, ConfirmationsServiceImpl},
+        notifications_consumer_service::{
+            NotificationsConsumerService, NotificationsConsumerServiceConfig,
+        },
         tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
         websockets_service::{WebSocketsService, WebSocketsServiceConfig, WebSocketsServiceImpl},
     },
@@ -23,6 +26,7 @@ pub struct ApplicationStateToClose {
     pub db_client: Client,
     pub rabbitmq_connection: RabbitmqConnection,
     pub rabbitmq_confirmations_service: Arc<ConfirmationsServiceImpl>,
+    pub rabbitmq_consumer_service: NotificationsConsumerService,
 }
 
 pub async fn create_state(
@@ -67,6 +71,17 @@ pub async fn create_state(
         WebSocketsServiceImpl::new(config, rabbitmq_confirmations_service.clone());
     let websockets_service = Arc::new(websockets_service);
 
+    let config = NotificationsConsumerServiceConfig {
+        exchange: env.rabbitmq_notifications_exchange_name.clone(),
+        queue: env.rabbitmq_notifications_queue_name.clone(),
+    };
+    let rabbitmq_consumer_service = NotificationsConsumerService::new(
+        config,
+        rabbitmq_connection.clone(),
+        websockets_service.clone(),
+    )
+    .await?;
+
     Ok((
         ApplicationState {
             tickets_service,
@@ -76,6 +91,7 @@ pub async fn create_state(
             db_client,
             rabbitmq_connection,
             rabbitmq_confirmations_service,
+            rabbitmq_consumer_service,
         },
     ))
 }

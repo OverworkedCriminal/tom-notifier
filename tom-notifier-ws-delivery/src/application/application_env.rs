@@ -22,6 +22,8 @@ pub struct ApplicationEnv {
     pub jwt_key: DecodingKey,
 
     pub rabbitmq_connection_string: String,
+    pub rabbitmq_notifications_exchange_name: String,
+    pub rabbitmq_notifications_queue_name: String,
     pub rabbitmq_confirmations_exchange_name: String,
     pub rabbitmq_retry_interval: Duration,
 }
@@ -55,6 +57,10 @@ impl ApplicationEnv {
         )?;
         let rabbitmq_connection_string =
             Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING")?;
+        let rabbitmq_notifications_exchange_name =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
+        let rabbitmq_notifications_queue_name =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_NOTIFICATIONS_QUEUE_NAME")?;
         let rabbitmq_confirmations_exchange_name =
             Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME")?;
         let rabbitmq_retry_interval =
@@ -74,6 +80,8 @@ impl ApplicationEnv {
             jwt_algorithms,
             jwt_key,
             rabbitmq_connection_string,
+            rabbitmq_notifications_exchange_name,
+            rabbitmq_notifications_queue_name,
             rabbitmq_confirmations_exchange_name,
             rabbitmq_retry_interval,
         })

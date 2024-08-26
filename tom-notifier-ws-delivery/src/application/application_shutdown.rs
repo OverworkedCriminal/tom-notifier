@@ -2,6 +2,9 @@ use super::ApplicationStateToClose;
 use std::sync::Arc;
 
 pub async fn close(state: ApplicationStateToClose) {
+    tracing::info!("closing rabbitmq notifications consumer service");
+    state.rabbitmq_consumer_service.close().await;
+
     tracing::info!("closing rabbimq confirmations service");
     match Arc::try_unwrap(state.rabbitmq_confirmations_service) {
         Ok(confirmations_service) => confirmations_service.close().await,

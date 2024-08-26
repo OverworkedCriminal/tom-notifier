@@ -11,4 +11,6 @@ pub trait WebSocketsService: Send + Sync {
     async fn close_connections(&self, user_id: Uuid);
 
     async fn send(&self, user_ids: &[Uuid], notification: output::NotificationProtobuf);
+
+    async fn update_network_status(&self, status: output::NetworkStatusProtobuf);
 }

@@ -4,7 +4,7 @@ use super::{
     WebSocketsService,
 };
 use crate::{
-    dto::{input::NotificationStatusProtobuf, output},
+    dto::output,
     service::{
         confirmations_service::ConfirmationsService,
         websockets_service::websocket_connection::WebSocketConnection,
@@ -13,13 +13,21 @@ use crate::{
 use axum::{async_trait, extract::ws::WebSocket};
 use futures::StreamExt;
 use prost::Message as ProstMessage;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 pub struct WebSocketsServiceImpl {
     config: Arc<WebSocketsServiceConfig>,
 
+    network_status_ok: AtomicBool,
     users_connections: Arc<RwLock<HashMap<Uuid, broadcast::Sender<Arc<WebSocketMessage>>>>>,
 
     confirmations_service: Arc<dyn ConfirmationsService>,
@@ -36,21 +44,35 @@ impl WebSocketsServiceImpl {
 
         Self {
             config: Arc::new(config),
+            network_status_ok: AtomicBool::new(true),
             users_connections,
             confirmations_service,
         }
     }
 
-    fn create_message(&self, notification: output::NotificationProtobuf) -> Arc<WebSocketMessage> {
+    fn create_message(
+        &self,
+        network_status: output::NetworkStatusProtobuf,
+        notification: Option<output::NotificationProtobuf>,
+    ) -> Arc<WebSocketMessage> {
         let message_id = Uuid::new_v4();
-        let payload = notification.encode_to_vec();
-        let delivered_callback = match notification.status() == NotificationStatusProtobuf::New {
-            true => Some(WebSocketConfirmationCallback::new(
-                Arc::clone(&self.confirmations_service),
-                notification.id,
-            )),
-            false => None,
+        let delivered_callback = notification
+            .as_ref()
+            .filter(|notification| notification.status() == output::NotificationStatusProtobuf::New)
+            .map(|notification| {
+                WebSocketConfirmationCallback::new(
+                    Arc::clone(&self.confirmations_service),
+                    notification.id.clone(),
+                )
+            });
+
+        let websocket_message = output::WebSocketNotificationProtobuf {
+            message_id: message_id.to_string(),
+            network_status: network_status.into(),
+            notification,
         };
+
+        let payload = websocket_message.encode_to_vec();
 
         Arc::new(WebSocketMessage {
             message_id,
@@ -100,22 +122,29 @@ impl WebSocketsService for WebSocketsServiceImpl {
         );
 
         // Find messages channel or create new one if necessary
-        let messages_rx = {
+        let (messages_tx, messages_rx) = {
             let mut connections_lock = self.users_connections.write().await;
-            match connections_lock.get_mut(&user_id) {
-                Some(messages_tx) => messages_tx.subscribe(),
+            match connections_lock.get(&user_id) {
+                Some(messages_tx) => (messages_tx.clone(), messages_tx.subscribe()),
                 None => {
                     let (messages_tx, messages_rx) = tokio::sync::broadcast::channel(16);
-                    connections_lock.insert(user_id, messages_tx);
+                    connections_lock.insert(user_id, messages_tx.clone());
                     tracing::trace!(user_id = user_id_str, "added user to connected_users");
-                    messages_rx
+                    (messages_tx, messages_rx)
                 }
             }
         };
 
-        let (ws_tx, ws_rx) = websocket.split();
+        // If there's a network problem, user should be informed that he
+        // should not rely on websockets until problem is gone
+        let network_status_ok = self.network_status_ok.load(Ordering::Acquire);
+        if !network_status_ok {
+            let message = self.create_message(output::NetworkStatusProtobuf::Error, None);
+            unsafe { messages_tx.send(message).unwrap_unchecked() };
+        }
 
         // Create connection
+        let (ws_tx, ws_rx) = websocket.split();
         let connection = WebSocketConnection::new(
             Arc::clone(&self.config),
             user_id,
@@ -165,11 +194,25 @@ impl WebSocketsService for WebSocketsServiceImpl {
     }
 
     async fn send(&self, user_ids: &[Uuid], notification: output::NotificationProtobuf) {
-        let message = self.create_message(notification);
+        let message = self.create_message(output::NetworkStatusProtobuf::Ok, Some(notification));
         match user_ids.is_empty() {
             true => self.send_broadcast(message).await,
             false => self.send_multicast(user_ids, message).await,
         }
+    }
+
+    async fn update_network_status(&self, status: output::NetworkStatusProtobuf) {
+        // Store network status so incomming connections can be informed
+        // about network error
+        self.network_status_ok.store(
+            status == output::NetworkStatusProtobuf::Ok,
+            Ordering::Release,
+        );
+
+        // Send information about network problems to every connected user
+        // so they can start using long polling
+        let message = self.create_message(status, None);
+        self.send_broadcast(message).await;
     }
 }
 
