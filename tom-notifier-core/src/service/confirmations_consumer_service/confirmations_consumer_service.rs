@@ -114,19 +114,19 @@ impl AsyncConsumer for Consumer {
             Ok(()) => {
                 tracing::trace!("sending ack");
                 let args = BasicAckArguments::new(deliver.delivery_tag(), false);
-                if let Err(err) = channel.basic_ack(args).await {
-                    tracing::warn!(%err, "failed to ack message")
+                match channel.basic_ack(args).await {
+                    Ok(()) => tracing::trace!("ack sent"),
+                    Err(err) => tracing::warn!(%err, "failed to ack message"),
                 }
-                tracing::trace!("ack sent");
             }
             Err(err) => {
                 tracing::warn!(%err, "failed to consume confirmation");
                 tracing::trace!("sending nack");
                 let args = BasicNackArguments::new(deliver.delivery_tag(), false, true);
-                if let Err(err) = channel.basic_nack(args).await {
-                    tracing::warn!(%err, "failed to nack message");
+                match channel.basic_nack(args).await {
+                    Ok(()) => tracing::trace!("nack sent"),
+                    Err(err) => tracing::warn!(%err, "failed to nack message"),
                 }
-                tracing::trace!("nack sent");
             }
         }
 
