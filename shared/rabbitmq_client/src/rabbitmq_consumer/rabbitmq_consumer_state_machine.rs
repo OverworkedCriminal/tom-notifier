@@ -1,4 +1,4 @@
-use super::dto::RabbitmqConsumerStatus;
+use super::{dto::RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback};
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
     retry::retry, RabbitmqConnection,
@@ -15,7 +15,7 @@ use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::{watch, Notify};
 
-pub struct RabbitmqConsumerStateMachine<Consumer> {
+pub struct RabbitmqConsumerStateMachine<Consumer, StatusCallback> {
     rabbitmq_connection: RabbitmqConnection,
 
     connection: Option<Connection>,
@@ -29,14 +29,15 @@ pub struct RabbitmqConsumerStateMachine<Consumer> {
     consumer: Consumer,
 
     consumer_cancelled: Arc<Notify>,
-    status_tx: watch::Sender<RabbitmqConsumerStatus>,
+    status_callback: StatusCallback,
 
     state: State,
 }
 
-impl<Consumer> RabbitmqConsumerStateMachine<Consumer>
+impl<Consumer, StatusCallback> RabbitmqConsumerStateMachine<Consumer, StatusCallback>
 where
     Consumer: AsyncConsumer + Clone + Send + 'static,
+    StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
 {
     pub fn new(
         rabbitmq_connection: RabbitmqConnection,
@@ -49,7 +50,7 @@ where
         basic_consume_args: BasicConsumeArguments,
         consumer: Consumer,
         consumer_cancelled: Arc<Notify>,
-        consumer_status_tx: watch::Sender<RabbitmqConsumerStatus>,
+        status_callback: StatusCallback,
     ) -> Self {
         Self {
             rabbitmq_connection,
@@ -62,7 +63,7 @@ where
             basic_consume_args,
             consumer,
             consumer_cancelled,
-            status_tx: consumer_status_tx,
+            status_callback,
             state: State::Ok,
         }
     }
@@ -123,8 +124,9 @@ where
     }
 
     async fn ok_state(&mut self) {
-        self.status_tx
-            .send_replace(RabbitmqConsumerStatus::Consuming);
+        self.status_callback
+            .execute(RabbitmqConsumerStatus::Consuming)
+            .await;
 
         tokio::select! {
             biased;
@@ -139,8 +141,9 @@ where
             }
         }
 
-        self.status_tx
-            .send_replace(RabbitmqConsumerStatus::Recovering);
+        self.status_callback
+            .execute(RabbitmqConsumerStatus::Recovering)
+            .await;
     }
 
     async fn waiting_for_connection_state(&mut self) {

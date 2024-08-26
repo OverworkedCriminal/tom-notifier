@@ -1,4 +1,7 @@
-use super::{dto::RabbitmqConsumerStatus, rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine};
+use super::{
+    rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine,
+    RabbitmqConsumerStatusChangeCallback,
+};
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
     RabbitmqConnection,
@@ -10,11 +13,10 @@ use amqprs::{
     consumer::AsyncConsumer,
 };
 use std::sync::Arc;
-use tokio::{sync::{watch, Notify}, task::JoinHandle};
+use tokio::{sync::Notify, task::JoinHandle};
 
 pub struct RabbitmqConsumer {
     task_handle: JoinHandle<()>,
-    status_rx: watch::Receiver<RabbitmqConsumerStatus>,
 
     close_notify: Arc<Notify>,
 }
@@ -25,16 +27,18 @@ impl RabbitmqConsumer {
         target = "rabbitmq_client::consumer",
         skip_all
     )]
-    pub async fn new<Consumer>(
+    pub async fn new<Consumer, StatusCallback>(
         rabbitmq_connection: RabbitmqConnection,
         mut exchange_declare_args: ExchangeDeclareArguments,
         mut queue_declare_args: QueueDeclareArguments,
         mut queue_bind_args: Vec<QueueBindArguments>,
         mut basic_consume_args: BasicConsumeArguments,
         consumer: Consumer,
+        status_callback: StatusCallback,
     ) -> anyhow::Result<Self>
     where
         Consumer: AsyncConsumer + Clone + Send + 'static,
+        StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
     {
         tracing::info!("starting consumer");
 
@@ -74,7 +78,6 @@ impl RabbitmqConsumer {
             .basic_consume(consumer.clone(), basic_consume_args.clone())
             .await?;
 
-        let (status_tx, status_rx) = watch::channel(RabbitmqConsumerStatus::Consuming);
         let state_machine = RabbitmqConsumerStateMachine::new(
             rabbitmq_connection,
             connection,
@@ -86,7 +89,7 @@ impl RabbitmqConsumer {
             basic_consume_args,
             consumer,
             consumer_cancelled,
-            status_tx,
+            status_callback,
         );
 
         let close_notify = Arc::new(Notify::new());
@@ -99,7 +102,6 @@ impl RabbitmqConsumer {
 
         Ok(Self {
             task_handle,
-            status_rx,
             close_notify,
         })
     }
@@ -113,9 +115,5 @@ impl RabbitmqConsumer {
         self.task_handle.await.unwrap();
 
         tracing::info!("consumer closed");
-    }
-
-    pub fn status(&self) -> watch::Receiver<RabbitmqConsumerStatus> {
-        self.status_rx.clone()
     }
 }
