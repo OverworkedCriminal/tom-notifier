@@ -171,7 +171,7 @@ impl TicketsRepository for TicketsRepositoryImpl {
 #[cfg(test)]
 mod test {
     use super::*;
-    use repository::tickets_repository::test::{create_test_database, destroy_test_database};
+    use repository::test::{create_test_database, destroy_test_database};
     use std::{sync::Once, time::Duration};
 
     static BEFORE_ALL: Once = Once::new();
