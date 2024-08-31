@@ -437,6 +437,61 @@ mod test {
         assert!(message.delivered_callback.is_none());
     }
 
+    #[tokio::test]
+    async fn update_network_status_all_users_receive_network_status_ok_update() {
+        test_update_network_status_all_users_receive_network_status_update(
+            output::NetworkStatusProtobuf::Ok,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn update_network_status_all_users_receive_network_status_error_update() {
+        test_update_network_status_all_users_receive_network_status_update(
+            output::NetworkStatusProtobuf::Error,
+        )
+        .await;
+    }
+
+    async fn test_update_network_status_all_users_receive_network_status_update(
+        status: output::NetworkStatusProtobuf,
+    ) {
+        let service = create_service();
+        let user_1_id = Uuid::new_v4();
+        let user_2_id = Uuid::new_v4();
+        let user_3_id = Uuid::new_v4();
+
+        // simulate connection
+        let (tx_1, mut rx_1) = broadcast::channel(8);
+        let (tx_2, mut rx_2) = broadcast::channel(8);
+        let (tx_3, mut rx_3) = broadcast::channel(8);
+        {
+            let mut lock = service.users_connections.write().await;
+            lock.insert(user_1_id, tx_1);
+            lock.insert(user_2_id, tx_2);
+            lock.insert(user_3_id, tx_3);
+        }
+
+        service.update_network_status(status).await;
+
+        let (t1, t2, t3) = tokio::join!(
+            tokio::time::timeout(Duration::from_millis(100), rx_1.recv()),
+            tokio::time::timeout(Duration::from_millis(100), rx_2.recv()),
+            tokio::time::timeout(Duration::from_millis(100), rx_3.recv()),
+        );
+
+        for timeout in [t1, t2, t3] {
+            let message = timeout.unwrap();
+            let message = message.unwrap();
+
+            let websocket_message =
+                output::WebSocketNotificationProtobuf::decode(message.payload.as_slice()).unwrap();
+
+            assert_eq!(websocket_message.network_status(), status);
+            assert!(websocket_message.notification.is_none());
+        }
+    }
+
     fn create_service() -> WebSocketsServiceImpl {
         // config does not matter
         let config = WebSocketsServiceConfig {
