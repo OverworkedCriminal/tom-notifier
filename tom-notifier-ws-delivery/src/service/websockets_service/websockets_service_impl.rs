@@ -122,9 +122,10 @@ impl WebSocketsService for WebSocketsServiceImpl {
         );
 
         // Find messages channel or create new one if necessary
-        let (messages_tx, messages_rx) = {
+        let messages_rx = {
             let mut connections_lock = self.users_connections.write().await;
-            match connections_lock.get(&user_id) {
+
+            let (messages_tx, messages_rx) = match connections_lock.get(&user_id) {
                 Some(messages_tx) => (messages_tx.clone(), messages_tx.subscribe()),
                 None => {
                     let (messages_tx, messages_rx) = tokio::sync::broadcast::channel(16);
@@ -132,16 +133,28 @@ impl WebSocketsService for WebSocketsServiceImpl {
                     tracing::trace!(user_id = user_id_str, "added user to connected_users");
                     (messages_tx, messages_rx)
                 }
-            }
-        };
+            };
 
-        // If there's a network problem, user should be informed that he
-        // should not rely on websockets until problem is gone
-        let network_status_ok = self.network_status_ok.load(Ordering::Acquire);
-        if !network_status_ok {
-            let message = self.create_message(output::NetworkStatusProtobuf::Error, None);
-            unsafe { messages_tx.send(message).unwrap_unchecked() };
-        }
+            // If there's a network problem, user should be informed that he
+            // should not rely on websockets until problem is gone.
+            //
+            // It should be performed while holding connections_lock.
+            // Without lock there's possibility that events will happen in this order:
+            //
+            // Thread_1: load network_status_ok (value is false)
+            // Thread_2: update_network_status(Status::OK)
+            // (message is sent to everyone including this connection)
+            // Thread_1: send Status::ERROR
+            //
+            // connection's last message is ERROR when it should be OK
+            let network_status_ok = self.network_status_ok.load(Ordering::Acquire);
+            if !network_status_ok {
+                let message = self.create_message(output::NetworkStatusProtobuf::Error, None);
+                unsafe { messages_tx.send(message).unwrap_unchecked() };
+            }
+
+            messages_rx
+        };
 
         // Create connection
         let (ws_tx, ws_rx) = websocket.split();
