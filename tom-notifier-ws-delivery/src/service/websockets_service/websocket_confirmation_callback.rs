@@ -29,7 +29,7 @@ impl WebSocketConfirmationCallback {
             return;
         }
 
-        let confirmation = output::ConfirmationProtobuf {
+        let confirmation = output::RabbitmqConfirmationProtobuf {
             user_id: user_id.to_string(),
             id: self.id.clone(),
         };

@@ -1,7 +1,7 @@
 pub use super::inoutput::WebSocketTicket;
 
 pub use super::protobuf::{
-    confirmation::ConfirmationProtobuf,
     notification::{NotificationProtobuf, NotificationStatusProtobuf},
+    rabbitmq_confirmation::RabbitmqConfirmationProtobuf,
     websocket_notification::{NetworkStatusProtobuf, WebSocketNotificationProtobuf},
 };
