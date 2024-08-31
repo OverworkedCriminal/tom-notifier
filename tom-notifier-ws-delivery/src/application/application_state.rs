@@ -6,6 +6,7 @@ use crate::{
         notifications_consumer_service::{
             NotificationsConsumerService, NotificationsConsumerServiceConfig,
         },
+        notifications_deduplication_service::NotificationsDeduplicationServiceImpl,
         tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
         websockets_service::{WebSocketsService, WebSocketsServiceConfig, WebSocketsServiceImpl},
     },
@@ -71,6 +72,9 @@ pub async fn create_state(
         WebSocketsServiceImpl::new(config, rabbitmq_confirmations_service.clone());
     let websockets_service = Arc::new(websockets_service);
 
+    let deduplication_service = NotificationsDeduplicationServiceImpl::new();
+    let deduplication_service = Arc::new(deduplication_service);
+
     let config = NotificationsConsumerServiceConfig {
         exchange: env.rabbitmq_notifications_exchange_name.clone(),
         queue: env.rabbitmq_notifications_queue_name.clone(),
@@ -79,6 +83,7 @@ pub async fn create_state(
         config,
         rabbitmq_connection.clone(),
         websockets_service.clone(),
+        deduplication_service,
     )
     .await?;
 

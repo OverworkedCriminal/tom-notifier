@@ -1,7 +1,11 @@
 use super::NotificationsConsumerServiceConfig;
 use crate::{
     dto::{input, output},
-    service::websockets_service::WebSocketsService,
+    error::Error,
+    service::{
+        notifications_deduplication_service::NotificationsDeduplicationService,
+        websockets_service::WebSocketsService,
+    },
 };
 use amqprs::{
     channel::{
@@ -30,6 +34,7 @@ impl NotificationsConsumerService {
         config: NotificationsConsumerServiceConfig,
         rabbitmq_connection: RabbitmqConnection,
         websockets_service: Arc<dyn WebSocketsService>,
+        deduplication_service: Arc<dyn NotificationsDeduplicationService>,
     ) -> anyhow::Result<Self> {
         let queue = format!("{}_{}", config.queue, Uuid::new_v4());
         let exchange_declare_args =
@@ -50,6 +55,7 @@ impl NotificationsConsumerService {
             .finish();
         let consumer = Consumer {
             websockets_service: Arc::clone(&websockets_service),
+            deduplication_service,
         };
         let status_callback = StatusCallback { websockets_service };
         let rabbitmq_consumer = RabbitmqConsumer::new(
@@ -74,12 +80,17 @@ impl NotificationsConsumerService {
 #[derive(Clone)]
 struct Consumer {
     websockets_service: Arc<dyn WebSocketsService>,
+    deduplication_service: Arc<dyn NotificationsDeduplicationService>,
 }
 
 impl Consumer {
-    async fn try_consume(&self, content: Vec<u8>) -> anyhow::Result<()> {
+    async fn try_consume(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
         let message = input::RabbitmqNotificationProtobuf::decode(content.as_slice())
             .map_err(|err| anyhow!("invalid notification: {err}"))?;
+
+        let notification = message
+            .notification
+            .ok_or_else(|| anyhow!("invalid notification: notification cannot be null"))?;
 
         let mut user_ids = Vec::with_capacity(message.user_ids.len());
         for uuid_str in message.user_ids {
@@ -88,9 +99,12 @@ impl Consumer {
             user_ids.push(uuid);
         }
 
-        let Some(notification) = message.notification else {
-            anyhow::bail!("invalid notification: notification cannot be null");
-        };
+        if let Err(err) = self.deduplication_service.deduplicate(&notification).await {
+            return Err(ConsumeError {
+                err: anyhow!("deduplication failed: {err}"),
+                requeue: matches!(err, Error::Database(_)),
+            });
+        }
 
         self.websockets_service.send(&user_ids, notification).await;
 
@@ -125,10 +139,10 @@ impl AsyncConsumer for Consumer {
                     Err(err) => tracing::warn!(%err, "failed to ack message"),
                 }
             }
-            Err(err) => {
+            Err(ConsumeError { err, requeue }) => {
                 tracing::warn!(%err, "failed to consume notification");
                 tracing::trace!("sending nack");
-                let args = BasicNackArguments::new(deliver.delivery_tag(), false, false);
+                let args = BasicNackArguments::new(deliver.delivery_tag(), false, requeue);
                 match channel.basic_nack(args).await {
                     Ok(()) => tracing::trace!("nack sent"),
                     Err(err) => tracing::warn!(%err, "failed to nack message"),
@@ -154,5 +168,19 @@ impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
         self.websockets_service
             .update_network_status(network_status)
             .await;
+    }
+}
+
+struct ConsumeError {
+    err: anyhow::Error,
+    requeue: bool,
+}
+
+impl From<anyhow::Error> for ConsumeError {
+    fn from(value: anyhow::Error) -> Self {
+        Self {
+            err: value,
+            requeue: false,
+        }
     }
 }

@@ -15,6 +15,16 @@ pub enum Error {
 
     #[error("websocket ticket error: {0}")]
     TicketInvalid(&'static str),
+
+    #[error("notification already processed")]
+    NotificationAlreadyProcessed,
+
+    ///
+    /// This error should be returned only in situations
+    /// that should never occur when system is setup correctly.
+    ///
+    #[error("unexpected error: {0}")]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 impl IntoResponse for Error {
@@ -25,6 +35,8 @@ impl IntoResponse for Error {
             Error::Auth(_) => StatusCode::FORBIDDEN,
             Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::TicketInvalid(_) => StatusCode::UNAUTHORIZED,
+            Error::NotificationAlreadyProcessed => StatusCode::CONFLICT,
+            Error::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
         .into_response()
     }
