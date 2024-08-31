@@ -14,7 +14,10 @@ use amqprs::{
 use anyhow::anyhow;
 use axum::async_trait;
 use prost::Message;
-use rabbitmq_client::{RabbitmqConnection, RabbitmqConsumer};
+use rabbitmq_client::{
+    RabbitmqConnection, RabbitmqConsumer, RabbitmqConsumerStatus,
+    RabbitmqConsumerStatusChangeCallback,
+};
 use std::sync::Arc;
 
 pub struct ConfirmationsConsumerService {
@@ -41,6 +44,7 @@ impl ConfirmationsConsumerService {
         let consumer = Consumer {
             notifications_repository,
         };
+        let status_callback = StatusCallback;
         let rabbitmq_consumer = RabbitmqConsumer::new(
             rabbitmq_connection,
             exchange_declare_args,
@@ -48,6 +52,7 @@ impl ConfirmationsConsumerService {
             vec![queue_bind_args],
             basic_consume_args,
             consumer,
+            status_callback,
         )
         .await?;
 
@@ -66,7 +71,7 @@ struct Consumer {
 
 impl Consumer {
     async fn try_consume(&self, content: Vec<u8>) -> anyhow::Result<()> {
-        let message = input::ConfirmationProtobuf::decode(content.as_slice())
+        let message = input::RabbitmqConfirmationProtobuf::decode(content.as_slice())
             .map_err(|err| anyhow!("invalid confirmation: {err}"))?;
 
         let id_str = message.id.clone();
@@ -132,4 +137,10 @@ impl AsyncConsumer for Consumer {
 
         tracing::info!("confirmation processed");
     }
+}
+
+struct StatusCallback;
+#[async_trait]
+impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
+    async fn execute(&self, _status: RabbitmqConsumerStatus) {}
 }

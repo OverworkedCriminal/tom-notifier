@@ -10,4 +10,4 @@ pub use notification_invalidate_at::*;
 pub use notification_seen::*;
 pub use pagination::*;
 
-pub use super::protobuf::confirmation::ConfirmationProtobuf;
+pub use super::protobuf::rabbitmq_confirmation::RabbitmqConfirmationProtobuf;

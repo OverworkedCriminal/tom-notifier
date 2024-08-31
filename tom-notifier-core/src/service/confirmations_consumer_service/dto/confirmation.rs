@@ -9,10 +9,10 @@ pub struct Confirmation {
     pub id: ObjectId,
 }
 
-impl TryFrom<input::ConfirmationProtobuf> for Confirmation {
+impl TryFrom<input::RabbitmqConfirmationProtobuf> for Confirmation {
     type Error = anyhow::Error;
 
-    fn try_from(value: input::ConfirmationProtobuf) -> Result<Self, Self::Error> {
+    fn try_from(value: input::RabbitmqConfirmationProtobuf) -> Result<Self, Self::Error> {
         let user_id =
             Uuid::from_str(&value.user_id).map_err(|err| anyhow!("invalid user_id: {err}"))?;
         let id = ObjectId::from_str(&value.id).map_err(|err| anyhow!("invalid id: {err}"))?;

@@ -7,7 +7,7 @@ use amqprs::{
 };
 pub use common::*;
 use prost::Message;
-use protobuf::confirmation::ConfirmationProtobuf;
+use protobuf::rabbitmq_confirmation::RabbitmqConfirmationProtobuf;
 use reqwest::{header::CONTENT_TYPE, Client, StatusCode};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -59,7 +59,7 @@ async fn confirmed_message_does_not_appear_in_undelivered_notifications() {
     let exchange = std::env::var("TOM_NOTIFIER_CORE_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME").unwrap();
 
     let basic_properties = BasicProperties::default();
-    let confirmation = ConfirmationProtobuf {
+    let confirmation = RabbitmqConfirmationProtobuf {
         id: id.to_string(),
         user_id: user_id.to_string(),
     };
