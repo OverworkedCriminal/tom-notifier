@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package websocket_notification;
 
+import "google/protobuf/timestamp.proto";
 import "notification.proto";
 
 enum NetworkStatusProtobuf {
@@ -10,7 +11,7 @@ enum NetworkStatusProtobuf {
 }
 
 /*
- * Message always contains 'message_id' and 'network_status'.
+ * Message always contains 'message_id', 'message_timestamp' and 'network_status'.
  *
  * In general case user receive 'network_status' OK with non null notification.
  * Notification contains information about state change.
@@ -29,7 +30,8 @@ message WebSocketNotificationProtobuf {
 
     // used to confirm receipt of the websocket message
     string message_id = 1;
+    google.protobuf.Timestamp message_timestamp = 2;
 
-    NetworkStatusProtobuf network_status = 2;
-    optional notification.NotificationProtobuf notification = 3;
+    NetworkStatusProtobuf network_status = 3;
+    optional notification.NotificationProtobuf notification = 4;
 }

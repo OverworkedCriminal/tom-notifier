@@ -13,6 +13,7 @@ use crate::{
 use axum::{async_trait, extract::ws::WebSocket};
 use futures::StreamExt;
 use prost::Message as ProstMessage;
+use prost_types::Timestamp;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -21,6 +22,7 @@ use std::{
         Arc,
     },
 };
+use time::OffsetDateTime;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
@@ -55,6 +57,7 @@ impl WebSocketsServiceImpl {
         network_status: output::NetworkStatusProtobuf,
         notification: Option<output::NotificationProtobuf>,
     ) -> Arc<WebSocketMessage> {
+        let now = OffsetDateTime::now_utc();
         let message_id = Uuid::new_v4();
         let delivered_callback = notification
             .as_ref()
@@ -68,6 +71,10 @@ impl WebSocketsServiceImpl {
 
         let websocket_message = output::WebSocketNotificationProtobuf {
             message_id: message_id.to_string(),
+            message_timestamp: Some(Timestamp {
+                seconds: now.unix_timestamp(),
+                nanos: now.nanosecond() as i32,
+            }),
             network_status: network_status.into(),
             notification,
         };
