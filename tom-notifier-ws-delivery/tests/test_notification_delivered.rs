@@ -15,7 +15,10 @@ use reqwest::Client;
 use serial_test::{parallel, serial};
 use std::{future::Future, time::Duration};
 use time::OffsetDateTime;
-use tokio::{net::TcpStream, time::timeout};
+use tokio::{
+    net::TcpStream,
+    time::{sleep, timeout},
+};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
 
@@ -121,6 +124,98 @@ async fn notification_delivered_to_all_user_devices() -> anyhow::Result<()> {
 #[tokio::test]
 #[parallel]
 async fn notification_delivered_after_other_device_disconnected() -> anyhow::Result<()> {
+    init_env();
+
+    let id = ObjectId::new();
+    let user_id = Uuid::new_v4();
+
+    let now = OffsetDateTime::now_utc();
+    let notification = RabbitmqNotificationProtobuf {
+        user_ids: vec![user_id.to_string()],
+        notification: Some(NotificationProtobuf {
+            id: id.to_hex(),
+            status: NotificationStatusProtobuf::Updated.into(),
+            timestamp: Some(Timestamp {
+                seconds: now.unix_timestamp(),
+                nanos: now.nanosecond() as i32,
+            }),
+            created_by: None,
+            seen: Some(true),
+            content_type: None,
+            content: None,
+        }),
+    };
+
+    let client = Client::new();
+    let mut websockets = Vec::with_capacity(2);
+    for user_id in [user_id, user_id] {
+        let ticket = fetch_ticket(&client, user_id).await?;
+        let (ws, _) = connect_async(ws_url(&ticket)).await?;
+        websockets.push(ws);
+    }
+
+    let (connection, channel) = init_rabbitmq().await;
+
+    let exchange = std::env::var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_NOTIFICATIONS_EXCHANGE_NAME")?;
+
+    // Send first notification
+    let basic_properties = BasicProperties::default();
+    let bytes = notification.encode_to_vec();
+    let args = BasicPublishArguments::new(&exchange, "UPDATED");
+    channel.basic_publish(basic_properties, bytes, args).await?;
+
+    // All devices should receive a message
+    for ws in websockets.iter_mut() {
+        let ws_message = timeout(Duration::from_secs(5), ws.next()).await?.unwrap()?;
+        let Message::Binary(bytes) = ws_message else {
+            panic!("invalid message type");
+        };
+        let ws_message = WebSocketNotificationProtobuf::decode(bytes.as_slice())?;
+        assert_eq!(ws_message.notification.unwrap().id, id.to_hex());
+    }
+
+    // Close one websocket connection
+    let mut ws = websockets.pop().unwrap();
+    ws.close(None).await?;
+
+    // Leave some time for server processing
+    sleep(Duration::from_millis(500)).await;
+
+    let id = ObjectId::new();
+    let now = OffsetDateTime::now_utc();
+    let notification = RabbitmqNotificationProtobuf {
+        user_ids: vec![user_id.to_string()],
+        notification: Some(NotificationProtobuf {
+            id: id.to_hex(),
+            status: NotificationStatusProtobuf::Updated.into(),
+            timestamp: Some(Timestamp {
+                seconds: now.unix_timestamp(),
+                nanos: now.nanosecond() as i32,
+            }),
+            created_by: None,
+            seen: Some(true),
+            content_type: None,
+            content: None,
+        }),
+    };
+
+    // Send second notification
+    let basic_properties = BasicProperties::default();
+    let bytes = notification.encode_to_vec();
+    let args = BasicPublishArguments::new(&exchange, "UPDATED");
+    channel.basic_publish(basic_properties, bytes, args).await?;
+
+    // Remaining notification should receive a message
+    let mut ws = websockets.pop().unwrap();
+    let ws_message = timeout(Duration::from_secs(5), ws.next()).await?.unwrap()?;
+    let Message::Binary(bytes) = ws_message else {
+        panic!("invalid message type");
+    };
+    let ws_message = WebSocketNotificationProtobuf::decode(bytes.as_slice())?;
+    assert_eq!(ws_message.notification.unwrap().id, id.to_hex());
+
+    destroy_rabbitmq(connection, channel).await;
+
     Ok(())
 }
 
