@@ -1,9 +1,17 @@
+use amqprs::{
+    channel::Channel,
+    connection::{Connection, OpenConnectionArguments},
+};
 use http::StatusCode;
 use jwt_auth::test::create_jwt;
 use reqwest::Client;
 use serde_json::Value;
 use std::sync::Once;
 use uuid::Uuid;
+
+pub mod protobuf {
+    include!(concat!(env!("OUT_DIR"), "/protobuf.rs"));
+}
 
 static INIT_ENV_ONCE: Once = Once::new();
 
@@ -41,6 +49,23 @@ pub fn address() -> String {
 
 pub fn ws_url(ticket: &str) -> String {
     format!("ws://{}/ws/v1?ticket={}", address(), ticket)
+}
+
+pub async fn init_rabbitmq() -> (Connection, Channel) {
+    let connection_string =
+        std::env::var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING").unwrap();
+
+    let args = OpenConnectionArguments::try_from(connection_string.as_ref()).unwrap();
+    let connection = Connection::open(&args).await.unwrap();
+
+    let channel = connection.open_channel(None).await.unwrap();
+
+    (connection, channel)
+}
+
+pub async fn destroy_rabbitmq(connection: Connection, channel: Channel) {
+    channel.close().await.unwrap();
+    connection.close().await.unwrap();
 }
 
 fn encode_jwt(user_id: Uuid, roles: &[&str]) -> String {

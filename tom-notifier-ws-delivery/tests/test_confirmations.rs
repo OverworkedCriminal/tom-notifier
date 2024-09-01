@@ -5,7 +5,7 @@ use amqprs::{
         BasicGetArguments, BasicPublishArguments, Channel, QueueBindArguments,
         QueueDeclareArguments, QueueDeleteArguments,
     },
-    connection::{Connection, OpenConnectionArguments},
+    connection::Connection,
     BasicProperties, GetOk,
 };
 use bson::oid::ObjectId;
@@ -20,10 +20,6 @@ use time::OffsetDateTime;
 use tokio::time::{sleep, timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use uuid::Uuid;
-
-mod protobuf {
-    include!(concat!(env!("OUT_DIR"), "/protobuf.rs"));
-}
 
 #[tokio::test]
 #[serial]
@@ -85,7 +81,7 @@ async fn test_confirmation_send_after_response(
     let ticket = fetch_ticket(&client, user_id).await?;
     let (mut ws, _) = connect_async(ws_url(&ticket)).await?;
 
-    let (connection, channel) = init_rabbitmq(queue).await;
+    let (connection, channel) = init_rabbitmq_with_queue(queue).await;
 
     let basic_properties = BasicProperties::default();
     let args = BasicPublishArguments::new(
@@ -137,19 +133,13 @@ async fn test_confirmation_send_after_response(
 
     assertions_fn(queued_message, id, user_id);
 
-    destroy_rabbitmq(connection, channel, queue).await;
+    destroy_rabbitmq_with_queue(connection, channel, queue).await;
 
     Ok(())
 }
 
-async fn init_rabbitmq(queue: &str) -> (Connection, Channel) {
-    let connection_string =
-        std::env::var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING").unwrap();
-
-    let args = OpenConnectionArguments::try_from(connection_string.as_ref()).unwrap();
-    let connection = Connection::open(&args).await.unwrap();
-
-    let channel = connection.open_channel(None).await.unwrap();
+async fn init_rabbitmq_with_queue(queue: &str) -> (Connection, Channel) {
+    let (connection, channel) = init_rabbitmq().await;
 
     let exchange =
         std::env::var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONFIRMATIONS_EXCHANGE_NAME").unwrap();
@@ -161,10 +151,9 @@ async fn init_rabbitmq(queue: &str) -> (Connection, Channel) {
     (connection, channel)
 }
 
-async fn destroy_rabbitmq(connection: Connection, channel: Channel, queue: &str) {
+async fn destroy_rabbitmq_with_queue(connection: Connection, channel: Channel, queue: &str) {
     let args = QueueDeleteArguments::new(queue);
     channel.queue_delete(args).await.unwrap();
 
-    channel.close().await.unwrap();
-    connection.close().await.unwrap();
+    destroy_rabbitmq(connection, channel).await;
 }
