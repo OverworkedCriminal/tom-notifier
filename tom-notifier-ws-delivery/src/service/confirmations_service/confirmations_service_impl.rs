@@ -27,7 +27,11 @@ impl ConfirmationsServiceImpl {
     }
 
     pub async fn close(self) {
+        tracing::info!("closing confirmations producer");
+
         self.producer.close().await;
+
+        tracing::info!("confirmations producer closed");
     }
 }
 
