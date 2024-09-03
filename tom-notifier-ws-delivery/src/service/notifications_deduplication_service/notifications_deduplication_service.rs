@@ -1,4 +1,5 @@
-use crate::{dto::input, error::Error};
+use super::NotificationStatusUpdate;
+use crate::error::Error;
 use axum::async_trait;
 
 #[cfg_attr(test, mockall::automock)]
@@ -8,7 +9,7 @@ pub trait NotificationsDeduplicationService: Send + Sync {
     /// Function takes notification and makes sure it is not a duplicate.
     ///
     /// ### Errors
-    /// - [Error::NotificationAlreadyProcessed]
+    /// - [Error::Duplicate]
     ///
-    async fn deduplicate(&self, notification: &input::NotificationProtobuf) -> Result<(), Error>;
+    async fn deduplicate(&self, notification: NotificationStatusUpdate) -> Result<(), Error>;
 }

@@ -3,7 +3,9 @@ use crate::{
     dto::{input, output},
     error::Error,
     service::{
-        notifications_deduplication_service::NotificationsDeduplicationService,
+        notifications_deduplication_service::{
+            NotificationStatusUpdate, NotificationsDeduplicationService,
+        },
         websockets_service::WebSocketsService,
     },
 };
@@ -103,18 +105,28 @@ impl Consumer {
             user_ids.push(uuid);
         }
 
-        self.deduplication_service
-            .deduplicate(&notification)
+        let notification_status_update = NotificationStatusUpdate::try_from(&notification)?;
+
+        tracing::trace!("deduplicating notification");
+        match self
+            .deduplication_service
+            .deduplicate(notification_status_update)
             .await
-            .map_err(|err| ConsumeError {
+        {
+            Ok(()) => {
+                tracing::info!(id = notification.id, "sending notification to clients");
+                self.websockets_service.send(&user_ids, notification).await;
+                Ok(())
+            }
+            Err(Error::Duplicate) => {
+                tracing::trace!("notification already processed");
+                Ok(())
+            }
+            Err(err) => Err(ConsumeError {
                 err: anyhow!("failed to deduplicate notification: {err}"),
                 requeue: matches!(err, Error::Database(_)),
-            })?;
-
-        tracing::info!(id = notification.id, "sending notification to clients");
-        self.websockets_service.send(&user_ids, notification).await;
-
-        Ok(())
+            }),
+        }
     }
 }
 
