@@ -40,5 +40,11 @@ impl ConfirmationsService for ConfirmationsServiceImpl {
 
         self.producer
             .send(routing_key, basic_properties, encoded_message);
+
+        tracing::info!(
+            id = confirmation.id,
+            user_id = confirmation.user_id,
+            "produced confirmation",
+        );
     }
 }
