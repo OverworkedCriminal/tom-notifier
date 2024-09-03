@@ -1,5 +1,5 @@
 use super::{FanoutService, RabbitmqFanoutServiceConfig};
-use crate::dto::protobuf::notification::{NotificationProtobuf, NotificationStatusProtobuf};
+use crate::dto::output;
 use amqprs::{
     channel::{ExchangeDeclareArguments, ExchangeType},
     BasicProperties,
@@ -51,21 +51,24 @@ impl FanoutService for RabbitmqFanoutService {
         content_type: String,
         content: Vec<u8>,
     ) {
-        let message = NotificationProtobuf {
+        let message = output::RabbitmqNotificationProtobuf {
             user_ids: user_ids.into_iter().map(|uuid| uuid.to_string()).collect(),
-            id: id.to_hex(),
-            status: NotificationStatusProtobuf::New.into(),
-            timestamp: Some(Timestamp {
-                seconds: timestamp.unix_timestamp(),
-                nanos: timestamp.nanosecond() as i32,
+            notification: Some(output::NotificationProtobuf {
+                id: id.to_hex(),
+                status: output::NotificationStatusProtobuf::New.into(),
+                timestamp: Some(Timestamp {
+                    seconds: timestamp.unix_timestamp(),
+                    nanos: timestamp.nanosecond() as i32,
+                }),
+                created_by: Some(created_by.to_string()),
+                seen: Some(seen),
+                content_type: Some(content_type),
+                content: Some(content),
             }),
-            created_by: Some(created_by.to_string()),
-            seen: Some(seen),
-            content_type: Some(content_type),
-            content: Some(content),
         };
+        let encoded_message = message.encode_to_vec();
 
-        self.send("NEW", message.encode_to_vec());
+        self.send("NEW", encoded_message);
     }
 
     async fn send_updated(
@@ -75,38 +78,44 @@ impl FanoutService for RabbitmqFanoutService {
         seen: bool,
         timestamp: OffsetDateTime,
     ) {
-        let message = NotificationProtobuf {
+        let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
-            id: id.to_hex(),
-            status: NotificationStatusProtobuf::Updated.into(),
-            timestamp: Some(Timestamp {
-                seconds: timestamp.unix_timestamp(),
-                nanos: timestamp.nanosecond() as i32,
+            notification: Some(output::NotificationProtobuf {
+                id: id.to_hex(),
+                status: output::NotificationStatusProtobuf::Updated.into(),
+                timestamp: Some(Timestamp {
+                    seconds: timestamp.unix_timestamp(),
+                    nanos: timestamp.nanosecond() as i32,
+                }),
+                created_by: None,
+                seen: Some(seen),
+                content_type: None,
+                content: None,
             }),
-            created_by: None,
-            seen: Some(seen),
-            content_type: None,
-            content: None,
         };
+        let encoded_message = message.encode_to_vec();
 
-        self.send("UPDATED", message.encode_to_vec());
+        self.send("UPDATED", encoded_message);
     }
 
     async fn send_deleted(&self, user_id: Uuid, id: ObjectId, timestamp: OffsetDateTime) {
-        let message = NotificationProtobuf {
+        let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
-            id: id.to_hex(),
-            status: NotificationStatusProtobuf::Deleted.into(),
-            timestamp: Some(Timestamp {
-                seconds: timestamp.unix_timestamp(),
-                nanos: timestamp.nanosecond() as i32,
+            notification: Some(output::NotificationProtobuf {
+                id: id.to_hex(),
+                status: output::NotificationStatusProtobuf::Deleted.into(),
+                timestamp: Some(Timestamp {
+                    seconds: timestamp.unix_timestamp(),
+                    nanos: timestamp.nanosecond() as i32,
+                }),
+                created_by: None,
+                seen: None,
+                content_type: None,
+                content: None,
             }),
-            created_by: None,
-            seen: None,
-            content_type: None,
-            content: None,
         };
+        let encoded_message = message.encode_to_vec();
 
-        self.send("DELETED", message.encode_to_vec());
+        self.send("DELETED", encoded_message);
     }
 }

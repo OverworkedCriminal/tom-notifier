@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package confirmation;
-
-message ConfirmationProtobuf {
-    string user_id = 1;
-    string id = 2;
-}

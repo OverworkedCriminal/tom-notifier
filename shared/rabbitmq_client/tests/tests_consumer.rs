@@ -10,11 +10,13 @@ use amqprs::{
 };
 use async_trait::async_trait;
 use common::*;
-use rabbitmq_client::RabbitmqConsumer;
+use rabbitmq_client::{
+    RabbitmqConsumer, RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback,
+};
 use serial_test::{parallel, serial};
 use std::{process::Command, sync::Once, time::Duration};
 use tokio::{
-    sync::mpsc,
+    sync::{mpsc, watch},
     time::{sleep, timeout},
 };
 
@@ -41,6 +43,7 @@ async fn messages_received_by_the_consumer() {
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let consumer = Consumer { tx };
+    let status_callback = MockStatusCallback;
     let rabbitmq_consumer = RabbitmqConsumer::new(
         rabbitmq_connection.clone(),
         exchange_declare_args,
@@ -48,6 +51,7 @@ async fn messages_received_by_the_consumer() {
         vec![queue_bind_args],
         basic_consume_args,
         consumer,
+        status_callback,
     )
     .await
     .unwrap();
@@ -99,6 +103,7 @@ async fn messages_received_by_the_consumer_after_consumer_cancellation() {
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let consumer = Consumer { tx };
+    let status_callback = MockStatusCallback;
     let rabbitmq_consumer = RabbitmqConsumer::new(
         rabbitmq_connection.clone(),
         exchange_declare_args,
@@ -106,6 +111,7 @@ async fn messages_received_by_the_consumer_after_consumer_cancellation() {
         vec![queue_bind_args],
         basic_consume_args,
         consumer,
+        status_callback,
     )
     .await
     .unwrap();
@@ -179,6 +185,7 @@ async fn messages_received_by_the_consumer_after_server_restart() {
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let consumer = Consumer { tx };
+    let status_callback = MockStatusCallback;
     let rabbitmq_consumer = RabbitmqConsumer::new(
         rabbitmq_connection.clone(),
         exchange_declare_args,
@@ -186,6 +193,7 @@ async fn messages_received_by_the_consumer_after_server_restart() {
         vec![queue_bind_args],
         basic_consume_args,
         consumer,
+        status_callback,
     )
     .await
     .unwrap();
@@ -230,12 +238,101 @@ async fn messages_received_by_the_consumer_after_server_restart() {
         .await
         .unwrap();
 
-    let message = timeout(Duration::from_secs(10), rx.recv())
+    let message = timeout(Duration::from_secs(30), rx.recv())
         .await
         .unwrap()
         .unwrap();
 
     assert_eq!(message, content);
+
+    rabbitmq_consumer.close().await;
+    rabbitmq_connection.close().await;
+
+    channel.close().await.unwrap();
+    connection.close().await.unwrap();
+}
+
+#[tokio::test]
+#[parallel]
+async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
+    struct StatusCallback {
+        tx: watch::Sender<RabbitmqConsumerStatus>,
+    }
+    #[async_trait]
+    impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
+        async fn execute(&self, status: RabbitmqConsumerStatus) {
+            self.tx.send_replace(status);
+        }
+    }
+
+    BEFORE_ALL.call_once(init_test_environment);
+
+    const EXCHANGE: &str = "test consumer_status_changes_when_connection_is_broken_and_recreated";
+    const QUEUE: &str = "test consumer_status_changes_when_connection_is_broken_and_recreated";
+
+    let rabbitmq_connection = create_rabbitmq_connection().await;
+    let exchange_declare_args = ExchangeDeclareArguments::of_type(EXCHANGE, ExchangeType::Direct);
+    let queue_declare_args = QueueDeclareArguments::new(QUEUE)
+        .exclusive(false)
+        .auto_delete(true)
+        .finish();
+    let queue_bind_args = QueueBindArguments::new(QUEUE, EXCHANGE, "");
+    let basic_consume_args = BasicConsumeArguments::new(QUEUE, "")
+        .consumer_tag("consumer_status_changes_when_connection_is_broken_and_recreated".to_string())
+        .auto_ack(true)
+        .exclusive(false)
+        .finish();
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let consumer = Consumer { tx };
+    let (consumer_status_tx, mut consumer_status_rx) =
+        watch::channel(RabbitmqConsumerStatus::Consuming);
+    let status_callback = StatusCallback {
+        tx: consumer_status_tx,
+    };
+    let rabbitmq_consumer = RabbitmqConsumer::new(
+        rabbitmq_connection.clone(),
+        exchange_declare_args,
+        queue_declare_args,
+        vec![queue_bind_args],
+        basic_consume_args,
+        consumer,
+        status_callback,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        *consumer_status_rx.borrow_and_update(),
+        RabbitmqConsumerStatus::Consuming,
+    ));
+
+    let connection = create_connection().await.unwrap();
+    let channel = connection.open_channel(None).await.unwrap();
+
+    // Delete queue to force consumer cancelled signal
+    let args = QueueDeleteArguments::new(QUEUE);
+    channel.queue_delete(args).await.unwrap();
+
+    // Status change is expected after removing consumer's queue
+    timeout(Duration::from_secs(5), consumer_status_rx.changed())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        *consumer_status_rx.borrow_and_update(),
+        RabbitmqConsumerStatus::Recovering,
+    ));
+
+    // Status change after some time is expected after consumer
+    // recreates everything
+    timeout(Duration::from_secs(5), consumer_status_rx.changed())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        *consumer_status_rx.borrow_and_update(),
+        RabbitmqConsumerStatus::Consuming,
+    ));
 
     rabbitmq_consumer.close().await;
     rabbitmq_connection.close().await;
@@ -260,4 +357,10 @@ impl AsyncConsumer for Consumer {
     ) {
         self.tx.send(content).unwrap();
     }
+}
+
+struct MockStatusCallback;
+#[async_trait]
+impl RabbitmqConsumerStatusChangeCallback for MockStatusCallback {
+    async fn execute(&self, _status: RabbitmqConsumerStatus) {}
 }

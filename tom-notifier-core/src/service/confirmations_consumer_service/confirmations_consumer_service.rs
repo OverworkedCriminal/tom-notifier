@@ -1,6 +1,6 @@
 use super::{dto::Confirmation, ConfirmationsConsumerServiceConfig};
 use crate::{
-    dto::protobuf::confirmation::ConfirmationProtobuf,
+    dto::input,
     repository::{self, NotificationsRepository},
 };
 use amqprs::{
@@ -14,7 +14,10 @@ use amqprs::{
 use anyhow::anyhow;
 use axum::async_trait;
 use prost::Message;
-use rabbitmq_client::{RabbitmqConnection, RabbitmqConsumer};
+use rabbitmq_client::{
+    RabbitmqConnection, RabbitmqConsumer, RabbitmqConsumerStatus,
+    RabbitmqConsumerStatusChangeCallback,
+};
 use std::sync::Arc;
 
 pub struct ConfirmationsConsumerService {
@@ -41,6 +44,7 @@ impl ConfirmationsConsumerService {
         let consumer = Consumer {
             notifications_repository,
         };
+        let status_callback = StatusCallback;
         let rabbitmq_consumer = RabbitmqConsumer::new(
             rabbitmq_connection,
             exchange_declare_args,
@@ -48,6 +52,7 @@ impl ConfirmationsConsumerService {
             vec![queue_bind_args],
             basic_consume_args,
             consumer,
+            status_callback,
         )
         .await?;
 
@@ -66,7 +71,7 @@ struct Consumer {
 
 impl Consumer {
     async fn try_consume(&self, content: Vec<u8>) -> anyhow::Result<()> {
-        let message = ConfirmationProtobuf::decode(content.as_slice())
+        let message = input::RabbitmqConfirmationProtobuf::decode(content.as_slice())
             .map_err(|err| anyhow!("invalid confirmation: {err}"))?;
 
         let id_str = message.id.clone();
@@ -114,22 +119,28 @@ impl AsyncConsumer for Consumer {
             Ok(()) => {
                 tracing::trace!("sending ack");
                 let args = BasicAckArguments::new(deliver.delivery_tag(), false);
-                if let Err(err) = channel.basic_ack(args).await {
-                    tracing::warn!(%err, "failed to ack message")
+                match channel.basic_ack(args).await {
+                    Ok(()) => tracing::trace!("ack sent"),
+                    Err(err) => tracing::warn!(%err, "failed to ack message"),
                 }
-                tracing::trace!("ack sent");
             }
             Err(err) => {
                 tracing::warn!(%err, "failed to consume confirmation");
                 tracing::trace!("sending nack");
                 let args = BasicNackArguments::new(deliver.delivery_tag(), false, true);
-                if let Err(err) = channel.basic_nack(args).await {
-                    tracing::warn!(%err, "failed to nack message");
+                match channel.basic_nack(args).await {
+                    Ok(()) => tracing::trace!("nack sent"),
+                    Err(err) => tracing::warn!(%err, "failed to nack message"),
                 }
-                tracing::trace!("nack sent");
             }
         }
 
         tracing::info!("confirmation processed");
     }
+}
+
+struct StatusCallback;
+#[async_trait]
+impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
+    async fn execute(&self, _status: RabbitmqConsumerStatus) {}
 }

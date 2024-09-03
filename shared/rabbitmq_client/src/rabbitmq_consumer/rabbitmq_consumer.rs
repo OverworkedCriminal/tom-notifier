@@ -1,4 +1,7 @@
-use super::rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine;
+use super::{
+    rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine,
+    RabbitmqConsumerStatusChangeCallback,
+};
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
     RabbitmqConnection,
@@ -24,16 +27,18 @@ impl RabbitmqConsumer {
         target = "rabbitmq_client::consumer",
         skip_all
     )]
-    pub async fn new<Consumer>(
+    pub async fn new<Consumer, StatusCallback>(
         rabbitmq_connection: RabbitmqConnection,
         mut exchange_declare_args: ExchangeDeclareArguments,
         mut queue_declare_args: QueueDeclareArguments,
         mut queue_bind_args: Vec<QueueBindArguments>,
         mut basic_consume_args: BasicConsumeArguments,
         consumer: Consumer,
+        status_callback: StatusCallback,
     ) -> anyhow::Result<Self>
     where
         Consumer: AsyncConsumer + Clone + Send + 'static,
+        StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
     {
         tracing::info!("starting consumer");
 
@@ -84,6 +89,7 @@ impl RabbitmqConsumer {
             basic_consume_args,
             consumer,
             consumer_cancelled,
+            status_callback,
         );
 
         let close_notify = Arc::new(Notify::new());

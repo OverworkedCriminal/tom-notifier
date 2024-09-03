@@ -484,12 +484,11 @@ impl NotificationsRepository for NotificationsRepositoryImpl {
 ///
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use super::*;
     use crate::application::ApplicationEnv;
     use anyhow::{anyhow, Context};
     use mongodb::{options::ClientOptions, Client};
+    use std::time::Duration;
     use time::macros::datetime;
 
     async fn create_test_database() -> anyhow::Result<Database> {

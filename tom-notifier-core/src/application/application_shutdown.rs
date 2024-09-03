@@ -2,9 +2,6 @@ use super::ApplicationStateToClose;
 use std::sync::Arc;
 
 pub async fn close(state: ApplicationStateToClose) {
-    tracing::info!("closing connection with database");
-    state.db_client.shutdown().await;
-
     tracing::info!("closing rabbitmq fanout service");
     match Arc::try_unwrap(state.rabbitmq_fanout_service) {
         Ok(rabbitmq_fanout_service) => {
@@ -18,6 +15,9 @@ pub async fn close(state: ApplicationStateToClose) {
 
     tracing::info!("closing rabbitmq connection");
     state.rabbitmq_connection.close().await;
+
+    tracing::info!("closing connection with database");
+    state.db_client.shutdown().await;
 }
 
 pub async fn shutdown_signal() {

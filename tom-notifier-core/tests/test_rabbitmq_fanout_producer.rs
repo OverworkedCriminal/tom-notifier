@@ -9,7 +9,9 @@ use amqprs::{
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
 use prost::Message;
-use protobuf::notification::{NotificationProtobuf, NotificationStatusProtobuf};
+use protobuf::{
+    notification::NotificationStatusProtobuf, rabbitmq_notification::RabbitmqNotificationProtobuf,
+};
 use reqwest::{header::CONTENT_TYPE, Client, StatusCode};
 use serde_json::{json, Value};
 use std::{str::FromStr, time::Duration};
@@ -79,11 +81,12 @@ async fn new_notification() {
 
     let time_now = OffsetDateTime::now_utc();
 
-    let notification = NotificationProtobuf::decode(bytes.as_slice()).unwrap();
-    assert_eq!(notification.user_ids.len(), 1);
-    let notification_user_id_str = notification.user_ids.first().unwrap();
+    let rabbitmq_notification = RabbitmqNotificationProtobuf::decode(bytes.as_slice()).unwrap();
+    assert_eq!(rabbitmq_notification.user_ids.len(), 1);
+    let notification_user_id_str = rabbitmq_notification.user_ids.first().unwrap();
     let notification_user_id = Uuid::from_str(notification_user_id_str).unwrap();
     assert_eq!(notification_user_id, user_id);
+    let notification = rabbitmq_notification.notification.unwrap();
     assert_eq!(notification.id, id);
     assert_eq!(notification.status(), NotificationStatusProtobuf::New);
     let notification_timestamp = notification.timestamp.unwrap();
@@ -191,11 +194,12 @@ async fn updated_notification() {
 
     let time_now = OffsetDateTime::now_utc();
 
-    let notification = NotificationProtobuf::decode(bytes.as_slice()).unwrap();
-    assert_eq!(notification.user_ids.len(), 1);
-    let notification_user_id_str = notification.user_ids.first().unwrap();
+    let rabbitmq_notification = RabbitmqNotificationProtobuf::decode(bytes.as_slice()).unwrap();
+    assert_eq!(rabbitmq_notification.user_ids.len(), 1);
+    let notification_user_id_str = rabbitmq_notification.user_ids.first().unwrap();
     let notification_user_id = Uuid::from_str(notification_user_id_str).unwrap();
     assert_eq!(notification_user_id, user_id);
+    let notification = rabbitmq_notification.notification.unwrap();
     assert_eq!(notification.id, id);
     assert_eq!(notification.status(), NotificationStatusProtobuf::Updated);
     let notification_timestamp = notification.timestamp.unwrap();
@@ -294,11 +298,12 @@ async fn deleted_notification() {
 
     let time_now = OffsetDateTime::now_utc();
 
-    let notification = NotificationProtobuf::decode(bytes.as_slice()).unwrap();
-    assert_eq!(notification.user_ids.len(), 1);
-    let notification_user_id_str = notification.user_ids.first().unwrap();
+    let rabbitmq_notification = RabbitmqNotificationProtobuf::decode(bytes.as_slice()).unwrap();
+    assert_eq!(rabbitmq_notification.user_ids.len(), 1);
+    let notification_user_id_str = rabbitmq_notification.user_ids.first().unwrap();
     let notification_user_id = Uuid::from_str(notification_user_id_str).unwrap();
     assert_eq!(notification_user_id, user_id);
+    let notification = rabbitmq_notification.notification.unwrap();
     assert_eq!(notification.id, id);
     assert_eq!(notification.status(), NotificationStatusProtobuf::Deleted);
     let notification_timestamp = notification.timestamp.unwrap();
