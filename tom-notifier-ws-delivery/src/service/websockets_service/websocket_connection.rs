@@ -147,7 +147,7 @@ where
             .send(Message::Ping(bytes))
             .await
             .map_err(|err| anyhow!("failed to send ping: {err}"))?;
-        tracing::trace!(ping_message = self.ping_message, "sent ping");
+        tracing::trace!(ping_message = self.ping_message, "ping sent");
 
         self.pings_sent += 1;
         self.ping_time = Instant::now() + self.config.ping_interval;
@@ -161,9 +161,9 @@ where
     ) -> Result<(), Error> {
         match message {
             Some(Ok(Message::Binary(payload))) => {
-                tracing::info!("processing confirmation");
+                tracing::debug!("processing confirmation");
                 self.process_incomming_binary_message(payload).await?;
-                tracing::info!("processed confirmation");
+                tracing::debug!("processed confirmation");
             }
             Some(Ok(Message::Text(_))) => {
                 return Err(Error::Anyhow(anyhow!("received text message")));
@@ -200,17 +200,17 @@ where
             .iter()
             .position(|queued| queued.message.message_id == message_id)
         else {
-            tracing::warn!(message_id = message_id_str, "confirmation was not expected");
+            tracing::debug!(message_id = message_id_str, "confirmation was not expected");
             return Ok(());
         };
 
-        // Since user confirmed message it is responsive, so sending ping can be deferred
+        // Since user confirmed message he is responsive, so sending ping can be deferred
         self.ping_time = Instant::now() + self.config.ping_interval;
         self.pings_sent = 0;
 
         // Since idx is found earlier it is safe to call unwrap here
         let queued = unsafe { self.unconfirmed_messages.remove(idx).unwrap_unchecked() };
-        tracing::trace!(message_id = message_id_str, "message confirmed");
+        tracing::debug!(message_id = message_id_str, "message confirmed");
 
         // Execute callback if it is present
         if let Some(callback) = queued.message.delivered_callback.as_ref() {
@@ -282,7 +282,7 @@ where
                     message,
                 };
                 self.unconfirmed_messages.push_back(message);
-                tracing::info!(
+                tracing::debug!(
                     message_id = message_id_str,
                     "message waits for confirmation"
                 );

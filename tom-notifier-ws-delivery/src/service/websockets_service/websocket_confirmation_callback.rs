@@ -33,6 +33,8 @@ impl WebSocketConfirmationCallback {
             user_id: user_id.to_string(),
             id: self.id.clone(),
         };
+
+        tracing::info!("sending confirmation");
         self.confirmations_service.send(confirmation).await;
     }
 }

@@ -157,6 +157,11 @@ impl WebSocketsService for WebSocketsServiceImpl {
             let network_status_ok = self.network_status_ok.load(Ordering::Acquire);
             if !network_status_ok {
                 let message = self.create_message(output::NetworkStatusProtobuf::Error, None);
+                tracing::info!(
+                    message_id = message.message_id.to_string(),
+                    %user_id,
+                    "queued network status error message to be sent",
+                );
                 unsafe { messages_tx.send(message).unwrap_unchecked() };
             }
 
@@ -203,14 +208,14 @@ impl WebSocketsService for WebSocketsServiceImpl {
     }
 
     async fn close_connections(&self, user_id: Uuid) {
-        let count = {
+        let connections_count = {
             let mut connections_lock = self.users_connections.write().await;
             connections_lock.remove(&user_id)
         }
         .map(|tx| tx.receiver_count())
         .unwrap_or(0);
 
-        tracing::info!(%user_id, count, "closing user connections");
+        tracing::info!(%user_id, connections_count, "closing user connections");
     }
 
     async fn send(&self, user_ids: &[Uuid], notification: output::NotificationProtobuf) {
@@ -222,6 +227,8 @@ impl WebSocketsService for WebSocketsServiceImpl {
     }
 
     async fn update_network_status(&self, status: output::NetworkStatusProtobuf) {
+        tracing::info!(?status, "scheduling sending network status update");
+
         // Store network status so incomming connections can be informed
         // about network error
         self.network_status_ok.store(
@@ -233,6 +240,8 @@ impl WebSocketsService for WebSocketsServiceImpl {
         // so they can start using long polling
         let message = self.create_message(status, None);
         self.send_broadcast(message).await;
+
+        tracing::info!(?status, "sending network status update scheduled");
     }
 }
 
