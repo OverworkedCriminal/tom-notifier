@@ -34,10 +34,11 @@ impl ConfirmationsServiceImpl {
 #[async_trait]
 impl ConfirmationsService for ConfirmationsServiceImpl {
     async fn send(&self, confirmation: output::RabbitmqConfirmationProtobuf) {
-        let encoded_message = confirmation.encode_to_vec();
+        let routing_key = String::new();
         let basic_properties = BasicProperties::default().with_persistence(true).finish();
+        let encoded_message = confirmation.encode_to_vec();
 
         self.producer
-            .send("".to_string(), basic_properties, encoded_message);
+            .send(routing_key, basic_properties, encoded_message);
     }
 }
