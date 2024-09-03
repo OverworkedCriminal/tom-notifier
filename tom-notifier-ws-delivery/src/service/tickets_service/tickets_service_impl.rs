@@ -39,7 +39,7 @@ impl TicketsSerivce for TicketsServiceImpl {
             .repository
             .insert(&ticket, user_id, issued_at, expire_at)
             .await?;
-        tracing::info!(%id, "created ticket");
+        tracing::info!(%id, "ticket created");
 
         Ok(output::WebSocketTicket { ticket })
     }
@@ -79,7 +79,7 @@ impl TicketsSerivce for TicketsServiceImpl {
 
         match self.repository.update_used_at(ticket._id, now).await {
             Ok(()) => {
-                tracing::info!(id = %ticket._id, "consumed ticket");
+                tracing::info!(id = %ticket._id, "ticket consumed");
                 ticket.used_at = Some(now);
                 Ok(ticket)
             }
