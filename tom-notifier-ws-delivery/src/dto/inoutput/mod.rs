@@ -1,6 +1,3 @@
-use serde::{Deserialize, Serialize};
+mod websocket_ticket;
 
-#[derive(Serialize, Deserialize)]
-pub struct WebSocketTicket {
-    pub ticket: String,
-}
+pub use websocket_ticket::*;
