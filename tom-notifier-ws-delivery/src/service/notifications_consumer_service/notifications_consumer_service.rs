@@ -73,7 +73,11 @@ impl NotificationsConsumerService {
     }
 
     pub async fn close(self) {
+        tracing::info!("closing notifications consumer");
+
         self.rabbitmq_consumer.close().await;
+
+        tracing::info!("notifications consumer closed");
     }
 }
 
@@ -99,13 +103,15 @@ impl Consumer {
             user_ids.push(uuid);
         }
 
-        if let Err(err) = self.deduplication_service.deduplicate(&notification).await {
-            return Err(ConsumeError {
-                err: anyhow!("deduplication failed: {err}"),
+        self.deduplication_service
+            .deduplicate(&notification)
+            .await
+            .map_err(|err| ConsumeError {
+                err: anyhow!("failed to deduplicate notification: {err}"),
                 requeue: matches!(err, Error::Database(_)),
-            });
-        }
+            })?;
 
+        tracing::info!(id = notification.id, "sending notification to clients");
         self.websockets_service.send(&user_ids, notification).await;
 
         Ok(())
@@ -128,11 +134,13 @@ impl AsyncConsumer for Consumer {
         _basic_properties: BasicProperties,
         content: Vec<u8>,
     ) {
-        tracing::info!("processing notification");
+        tracing::info!("consuming notification");
 
         match self.try_consume(content).await {
             Ok(()) => {
+                tracing::info!("notification consumed");
                 tracing::trace!("sending ack");
+
                 let args = BasicAckArguments::new(deliver.delivery_tag(), false);
                 match channel.basic_ack(args).await {
                     Ok(()) => tracing::trace!("ack sent"),
@@ -142,6 +150,7 @@ impl AsyncConsumer for Consumer {
             Err(ConsumeError { err, requeue }) => {
                 tracing::warn!(%err, "failed to consume notification");
                 tracing::trace!("sending nack");
+
                 let args = BasicNackArguments::new(deliver.delivery_tag(), false, requeue);
                 match channel.basic_nack(args).await {
                     Ok(()) => tracing::trace!("nack sent"),
@@ -149,8 +158,6 @@ impl AsyncConsumer for Consumer {
                 }
             }
         }
-
-        tracing::info!("notification processed");
     }
 }
 
@@ -160,14 +167,19 @@ struct StatusCallback {
 #[async_trait]
 impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
     async fn execute(&self, status: RabbitmqConsumerStatus) {
+        tracing::info!(?status, "processing consumer status change");
+
         let network_status = match status {
             RabbitmqConsumerStatus::Consuming => output::NetworkStatusProtobuf::Ok,
             RabbitmqConsumerStatus::Recovering => output::NetworkStatusProtobuf::Error,
         };
 
+        tracing::info!(?network_status, "sending network status update to clients");
         self.websockets_service
             .update_network_status(network_status)
             .await;
+
+        tracing::info!(?status, "consumer status change processed");
     }
 }
 
