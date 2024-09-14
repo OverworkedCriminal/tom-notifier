@@ -25,6 +25,8 @@ mod protobuf {
 
 #[tokio::test]
 async fn new_notification() {
+    init_env();
+
     // after producing notification
     // fetching notification from queue bound to 'NEW' routing key
     // should return produced notification
@@ -105,6 +107,8 @@ async fn new_notification() {
 
 #[tokio::test]
 async fn updated_notification() {
+    init_env();
+
     // after producing notification,
     // marking it as delivered
     // and updating seen
@@ -218,6 +222,8 @@ async fn updated_notification() {
 
 #[tokio::test]
 async fn deleted_notification() {
+    init_env();
+
     // after producing notification,
     // marking it as delivered
     // and deleting it

@@ -5,6 +5,8 @@ use reqwest::{header::CONTENT_TYPE, Client, StatusCode};
 
 #[tokio::test]
 async fn max_content_length_http() {
+    init_env();
+
     // sending to large content should result in 413
 
     let max_content_len: usize = std::env::var("TOM_NOTIFIER_CORE_MAX_HTTP_CONTENT_LEN")

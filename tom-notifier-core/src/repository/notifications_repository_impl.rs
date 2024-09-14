@@ -485,17 +485,28 @@ impl NotificationsRepository for NotificationsRepositoryImpl {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::application::ApplicationEnv;
-    use anyhow::{anyhow, Context};
+    use anyhow::anyhow;
     use mongodb::{options::ClientOptions, Client};
-    use std::time::Duration;
+    use std::{sync::Once, time::Duration};
     use time::macros::datetime;
 
-    async fn create_test_database() -> anyhow::Result<Database> {
-        let env = ApplicationEnv::parse().context("failed to parse env variables")?;
-        let db_name = format!("test_{}_{}", env.db_name, Uuid::new_v4());
+    static BEFORE_ALL: Once = Once::new();
 
-        let db_client_options = ClientOptions::parse(&env.db_connection_string).await?;
+    fn init_env() {
+        let _ = dotenvy::dotenv();
+    }
+
+    async fn create_test_database() -> anyhow::Result<Database> {
+        BEFORE_ALL.call_once(init_env);
+
+        let db_connection_string = std::env::var("TOM_NOTIFIER_CORE_DB_CONNECTION_STRING")
+            .map_err(|_| anyhow!("TOM_NOTIFIER_CORE_DB_CONNECTION_STRING not set"))?;
+        let db_name = std::env::var("TOM_NOTIFIER_CORE_DB_NAME")
+            .map_err(|_| anyhow!("TOM_NOTIFIER_CORE_DB_NAME not set"))?;
+
+        let db_name = format!("test_{}_{}", db_name, Uuid::new_v4());
+
+        let db_client_options = ClientOptions::parse(&db_connection_string).await?;
         let db_client = Client::with_options(db_client_options)?;
         let db = db_client.database(&db_name);
 

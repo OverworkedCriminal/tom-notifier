@@ -1,5 +1,14 @@
 use jwt_auth::test::create_jwt;
+use std::sync::Once;
 use uuid::Uuid;
+
+static INIT_ENV_ONCE: Once = Once::new();
+
+pub fn init_env() {
+    INIT_ENV_ONCE.call_once(|| {
+        let _ = dotenvy::dotenv();
+    });
+}
 
 pub fn address() -> String {
     std::env::var("TOM_NOTIFIER_CORE_BIND_ADDRESS").unwrap()
