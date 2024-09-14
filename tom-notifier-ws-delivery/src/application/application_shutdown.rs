@@ -4,6 +4,10 @@ use std::sync::Arc;
 pub async fn close(state: ApplicationStateToClose) {
     tracing::info!("closing rabbitmq notifications consumer service");
     state.rabbitmq_consumer_service.close().await;
+    match Arc::try_unwrap(state.deduplication_service) {
+        Ok(deduplication_service) => deduplication_service.close().await,
+        Err(_) => tracing::error!("cannot close deduplication service"),
+    }
 
     tracing::info!("closing rabbimq confirmations service");
     match Arc::try_unwrap(state.rabbitmq_confirmations_service) {

@@ -27,6 +27,9 @@ pub struct ApplicationEnv {
     pub rabbitmq_notifications_queue_name: String,
     pub rabbitmq_confirmations_exchange_name: String,
     pub rabbitmq_retry_interval: Duration,
+
+    pub rabbitmq_deduplication_notification_lifespan: Duration,
+    pub rabbitmq_deduplication_garbage_collector_interval: Duration,
 }
 
 impl ApplicationEnv {
@@ -69,6 +72,17 @@ impl ApplicationEnv {
         let rabbitmq_retry_interval =
             Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_RETRY_INTERVAL")?.parse()?;
         let rabbitmq_retry_interval = Duration::from_secs(rabbitmq_retry_interval);
+        let rabbitmq_deduplication_notification_lifespan =
+            Self::env_var("TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_DEDUPLICATION_NOTIFICATION_LIFESPAN")?
+                .parse()?;
+        let rabbitmq_deduplication_notification_lifespan =
+            Duration::from_secs(rabbitmq_deduplication_notification_lifespan);
+        let rabbitmq_deduplication_garbage_collector_interval = Self::env_var(
+            "TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_DEDUPLICATION_GARBAGE_COLLECTOR_INTERVAL",
+        )?
+        .parse()?;
+        let rabbitmq_deduplication_garbage_collector_interval =
+            Duration::from_secs(rabbitmq_deduplication_garbage_collector_interval);
 
         Ok(Self {
             log_directory,
@@ -88,6 +102,8 @@ impl ApplicationEnv {
             rabbitmq_notifications_queue_name,
             rabbitmq_confirmations_exchange_name,
             rabbitmq_retry_interval,
+            rabbitmq_deduplication_notification_lifespan,
+            rabbitmq_deduplication_garbage_collector_interval,
         })
     }
 
