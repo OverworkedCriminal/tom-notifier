@@ -51,10 +51,14 @@ impl NotificationsProducerService for NotificationsProducerServiceImpl {
         content_type: String,
         content: Vec<u8>,
     ) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing NEW notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: user_ids.into_iter().map(|uuid| uuid.to_string()).collect(),
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::New.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
@@ -78,10 +82,14 @@ impl NotificationsProducerService for NotificationsProducerServiceImpl {
         seen: bool,
         timestamp: OffsetDateTime,
     ) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing UPDATED notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::Updated.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
@@ -99,10 +107,14 @@ impl NotificationsProducerService for NotificationsProducerServiceImpl {
     }
 
     async fn send_deleted(&self, user_id: Uuid, id: ObjectId, timestamp: OffsetDateTime) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing DELETED notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::Deleted.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
