@@ -1,6 +1,11 @@
-use super::{callback::RabbitmqConsumerStatusChangeCallback, dto::RabbitmqConsumerStatus};
+use super::{
+    callback::{RabbitmqConsumerDeliveryCallback, RabbitmqConsumerStatusChangeCallback},
+    dto::RabbitmqConsumerStatus,
+};
 use crate::{
-    connection::RabbitmqConnection, consumer::channel_callback::ChannelCallback, retry::retry,
+    connection::RabbitmqConnection,
+    consumer::{async_consumer::AsyncConsumer, channel_callback::ChannelCallback},
+    retry::retry,
 };
 use amqprs::{
     channel::{
@@ -8,13 +13,12 @@ use amqprs::{
         QueueBindArguments, QueueDeclareArguments,
     },
     connection::Connection,
-    consumer::AsyncConsumer,
 };
 use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::{watch, Notify};
 
-pub struct StateMachine<Consumer, StatusCallback> {
+pub struct StateMachine<DeliveryCallback, StatusCallback> {
     rabbitmq_connection: RabbitmqConnection,
 
     connection: Option<Connection>,
@@ -25,17 +29,18 @@ pub struct StateMachine<Consumer, StatusCallback> {
     queue_declare_args: QueueDeclareArguments,
     queue_bind_args: Vec<QueueBindArguments>,
     basic_consume_args: BasicConsumeArguments,
-    consumer: Consumer,
 
     consumer_cancelled: Arc<Notify>,
+
+    delivery_callback: Arc<DeliveryCallback>,
     status_callback: StatusCallback,
 
     state: State,
 }
 
-impl<Consumer, StatusCallback> StateMachine<Consumer, StatusCallback>
+impl<DeliveryCallback, StatusCallback> StateMachine<DeliveryCallback, StatusCallback>
 where
-    Consumer: AsyncConsumer + Clone + Send + 'static,
+    DeliveryCallback: RabbitmqConsumerDeliveryCallback + Send + Sync + 'static,
     StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
 {
     pub fn new(
@@ -47,8 +52,8 @@ where
         queue_declare_args: QueueDeclareArguments,
         queue_bind_args: Vec<QueueBindArguments>,
         basic_consume_args: BasicConsumeArguments,
-        consumer: Consumer,
         consumer_cancelled: Arc<Notify>,
+        delivery_callback: Arc<DeliveryCallback>,
         status_callback: StatusCallback,
     ) -> Self {
         Self {
@@ -60,7 +65,7 @@ where
             queue_declare_args,
             queue_bind_args,
             basic_consume_args,
-            consumer,
+            delivery_callback,
             consumer_cancelled,
             status_callback,
             state: State::Ok,
@@ -226,7 +231,7 @@ where
                 self.queue_declare_args.clone(),
                 self.queue_bind_args.clone(),
                 self.basic_consume_args.clone(),
-                self.consumer.clone(),
+                self.delivery_callback.clone(),
             ) => {
                 match result {
                     Ok(()) => self.state = State::Ok,
@@ -245,7 +250,7 @@ where
         queue_declare_args: QueueDeclareArguments,
         queue_bind_args: Vec<QueueBindArguments>,
         basic_consume_args: BasicConsumeArguments,
-        consumer: Consumer,
+        delivery_callback: Arc<DeliveryCallback>,
     ) -> anyhow::Result<()> {
         tracing::info!("recreating exchange");
         channel
@@ -268,6 +273,7 @@ where
         }
 
         tracing::info!("consuming");
+        let consumer = AsyncConsumer::new(channel.clone(), delivery_callback);
         channel
             .basic_consume(consumer, basic_consume_args)
             .await

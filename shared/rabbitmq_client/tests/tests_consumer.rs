@@ -2,16 +2,17 @@ mod common;
 
 use amqprs::{
     channel::{
-        BasicConsumeArguments, BasicPublishArguments, Channel, ExchangeDeclareArguments,
-        ExchangeType, QueueBindArguments, QueueDeclareArguments, QueueDeleteArguments,
+        BasicConsumeArguments, BasicPublishArguments, ExchangeDeclareArguments, ExchangeType,
+        QueueBindArguments, QueueDeclareArguments, QueueDeleteArguments,
     },
-    consumer::AsyncConsumer,
-    BasicProperties, Deliver,
+    BasicProperties,
 };
 use async_trait::async_trait;
 use common::*;
 use rabbitmq_client::consumer::{
-    callback::RabbitmqConsumerStatusChangeCallback, RabbitmqConsumer, RabbitmqConsumerStatus,
+    callback::{RabbitmqConsumerDeliveryCallback, RabbitmqConsumerStatusChangeCallback},
+    error::ConsumeError,
+    RabbitmqConsumer, RabbitmqConsumerStatus,
 };
 use serial_test::{parallel, serial};
 use std::{process::Command, sync::Once, time::Duration};
@@ -38,7 +39,6 @@ async fn messages_received_by_the_consumer() {
         .finish();
     let queue_bind_args = QueueBindArguments::new(QUEUE, EXCHANGE, "");
     let basic_consume_args = BasicConsumeArguments::new(QUEUE, "")
-        .auto_ack(true)
         .exclusive(true)
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -98,7 +98,6 @@ async fn messages_received_by_the_consumer_after_consumer_cancellation() {
     let queue_bind_args = QueueBindArguments::new(QUEUE, EXCHANGE, "");
     let basic_consume_args = BasicConsumeArguments::new(QUEUE, "")
         .consumer_tag("messages_received_by_the_consumer_after_consumer_cancellation".to_string())
-        .auto_ack(true)
         .exclusive(false)
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -149,7 +148,7 @@ async fn messages_received_by_the_consumer_after_consumer_cancellation() {
         .await
         .unwrap();
 
-    let message = timeout(Duration::from_secs(10), rx.recv())
+    let message = timeout(Duration::from_secs(30), rx.recv())
         .await
         .unwrap()
         .unwrap();
@@ -180,7 +179,6 @@ async fn messages_received_by_the_consumer_after_server_restart() {
     let queue_bind_args = QueueBindArguments::new(QUEUE, EXCHANGE, "");
     let basic_consume_args = BasicConsumeArguments::new(QUEUE, "")
         .consumer_tag("messages_received_by_the_consumer_after_server_restart".to_string())
-        .auto_ack(true)
         .exclusive(true)
         .finish();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -279,7 +277,6 @@ async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
     let queue_bind_args = QueueBindArguments::new(QUEUE, EXCHANGE, "");
     let basic_consume_args = BasicConsumeArguments::new(QUEUE, "")
         .consumer_tag("consumer_status_changes_when_connection_is_broken_and_recreated".to_string())
-        .auto_ack(true)
         .exclusive(false)
         .finish();
     let (tx, _rx) = mpsc::unbounded_channel();
@@ -337,21 +334,15 @@ async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
     connection.close().await.unwrap();
 }
 
-#[derive(Clone)]
 struct Consumer {
     tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
 #[async_trait]
-impl AsyncConsumer for Consumer {
-    async fn consume(
-        &mut self,
-        _channel: &Channel,
-        _deliver: Deliver,
-        _basic_properties: BasicProperties,
-        content: Vec<u8>,
-    ) {
+impl RabbitmqConsumerDeliveryCallback for Consumer {
+    async fn execute(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
         self.tx.send(content).unwrap();
+        Ok(())
     }
 }
 

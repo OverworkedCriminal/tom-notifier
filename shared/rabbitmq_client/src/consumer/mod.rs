@@ -3,7 +3,9 @@
 //!
 
 pub mod callback;
+pub mod error;
 
+mod async_consumer;
 mod channel_callback;
 mod dto;
 mod rabbitmq_consumer;
