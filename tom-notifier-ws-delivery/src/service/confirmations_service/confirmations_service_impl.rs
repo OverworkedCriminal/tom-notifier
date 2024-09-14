@@ -6,7 +6,7 @@ use amqprs::{
 };
 use axum::async_trait;
 use prost::Message;
-use rabbitmq_client::{RabbitmqConnection, RabbitmqProducer};
+use rabbitmq_client::{connection::RabbitmqConnection, producer::RabbitmqProducer};
 
 pub struct ConfirmationsServiceImpl {
     producer: RabbitmqProducer,

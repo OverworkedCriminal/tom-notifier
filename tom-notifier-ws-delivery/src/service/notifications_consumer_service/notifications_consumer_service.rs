@@ -9,20 +9,19 @@ use crate::{
         websockets_service::WebSocketsService,
     },
 };
-use amqprs::{
-    channel::{
-        BasicAckArguments, BasicConsumeArguments, BasicNackArguments, Channel,
-        ExchangeDeclareArguments, ExchangeType, QueueBindArguments, QueueDeclareArguments,
-    },
-    consumer::AsyncConsumer,
-    BasicProperties, Deliver,
+use amqprs::channel::{
+    BasicConsumeArguments, ExchangeDeclareArguments, ExchangeType, QueueBindArguments,
+    QueueDeclareArguments,
 };
-use anyhow::anyhow;
 use axum::async_trait;
 use prost::Message;
 use rabbitmq_client::{
-    RabbitmqConnection, RabbitmqConsumer, RabbitmqConsumerStatus,
-    RabbitmqConsumerStatusChangeCallback,
+    connection::RabbitmqConnection,
+    consumer::{
+        callback::{RabbitmqConsumerDeliveryCallback, RabbitmqConsumerStatusChangeCallback},
+        error::ConsumeError,
+        RabbitmqConsumer, RabbitmqConsumerStatus,
+    },
 };
 use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
@@ -89,23 +88,34 @@ struct Consumer {
     deduplication_service: Arc<dyn NotificationsDeduplicationService>,
 }
 
-impl Consumer {
-    async fn try_consume(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
-        let message = input::RabbitmqNotificationProtobuf::decode(content.as_slice())
-            .map_err(|err| anyhow!("invalid notification: {err}"))?;
+#[async_trait]
+impl RabbitmqConsumerDeliveryCallback for Consumer {
+    async fn execute(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
+        let message =
+            input::RabbitmqNotificationProtobuf::decode(content.as_slice()).map_err(|err| {
+                tracing::warn!(%err, "invalid notification");
+                ConsumeError { requeue: false }
+            })?;
 
-        let notification = message
-            .notification
-            .ok_or_else(|| anyhow!("invalid notification: notification cannot be null"))?;
+        let notification = message.notification.ok_or_else(|| {
+            tracing::warn!("invalid notification: notification cannot be null");
+            ConsumeError { requeue: false }
+        })?;
 
         let mut user_ids = Vec::with_capacity(message.user_ids.len());
         for uuid_str in message.user_ids {
-            let uuid =
-                Uuid::from_str(&uuid_str).map_err(|err| anyhow!("invalid user id: {err}"))?;
+            let uuid = Uuid::from_str(&uuid_str).map_err(|err| {
+                tracing::warn!(%err, "invalid user_id");
+                ConsumeError { requeue: false }
+            })?;
             user_ids.push(uuid);
         }
 
-        let notification_status_update = NotificationStatusUpdate::try_from(&notification)?;
+        let notification_status_update = NotificationStatusUpdate::try_from(&notification)
+            .map_err(|err| {
+                tracing::warn!(%err, "notification invalid");
+                ConsumeError { requeue: false }
+            })?;
 
         tracing::trace!("deduplicating notification");
         match self
@@ -120,54 +130,13 @@ impl Consumer {
             }
             Err(Error::Duplicate) => {
                 tracing::trace!("notification already processed");
-                Ok(())
+                Err(ConsumeError { requeue: false })
             }
-            Err(err) => Err(ConsumeError {
-                err: anyhow!("failed to deduplicate notification: {err}"),
-                requeue: matches!(err, Error::Database(_)),
-            }),
-        }
-    }
-}
-
-#[async_trait]
-impl AsyncConsumer for Consumer {
-    #[tracing::instrument(
-        name = "Notifications Consumer",
-        skip_all,
-        fields(
-            delivery_tag = deliver.delivery_tag(),
-        )
-    )]
-    async fn consume(
-        &mut self,
-        channel: &Channel,
-        deliver: Deliver,
-        _basic_properties: BasicProperties,
-        content: Vec<u8>,
-    ) {
-        tracing::info!("consuming notification");
-
-        match self.try_consume(content).await {
-            Ok(()) => {
-                tracing::info!("notification consumed");
-                tracing::trace!("sending ack");
-
-                let args = BasicAckArguments::new(deliver.delivery_tag(), false);
-                match channel.basic_ack(args).await {
-                    Ok(()) => tracing::trace!("ack sent"),
-                    Err(err) => tracing::warn!(%err, "failed to ack message"),
-                }
-            }
-            Err(ConsumeError { err, requeue }) => {
-                tracing::warn!(%err, "failed to consume notification");
-                tracing::trace!("sending nack");
-
-                let args = BasicNackArguments::new(deliver.delivery_tag(), false, requeue);
-                match channel.basic_nack(args).await {
-                    Ok(()) => tracing::trace!("nack sent"),
-                    Err(err) => tracing::warn!(%err, "failed to nack message"),
-                }
+            Err(err) => {
+                tracing::warn!(%err, "failed to deduplicate notification");
+                Err(ConsumeError {
+                    requeue: matches!(err, Error::Database(_)),
+                })
             }
         }
     }
@@ -192,19 +161,5 @@ impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
             .await;
 
         tracing::info!(?status, "consumer status change processed");
-    }
-}
-
-struct ConsumeError {
-    err: anyhow::Error,
-    requeue: bool,
-}
-
-impl From<anyhow::Error> for ConsumeError {
-    fn from(value: anyhow::Error) -> Self {
-        Self {
-            err: value,
-            requeue: false,
-        }
     }
 }
