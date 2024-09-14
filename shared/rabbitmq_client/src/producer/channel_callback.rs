@@ -1,19 +1,16 @@
 use super::dto::PublisherConfirm;
-use crate::rabbitmq_producer::dto::PublisherConfirmVariant;
-use amqprs::{
-    callbacks::ChannelCallback, channel::Channel, Ack, BasicProperties, Cancel, CloseChannel, Nack,
-    Return,
-};
+use crate::producer::dto::PublisherConfirmVariant;
+use amqprs::{channel::Channel, Ack, BasicProperties, Cancel, CloseChannel, Nack, Return};
 use async_trait::async_trait;
 use tokio::sync::{mpsc, watch};
 
 #[derive(Clone)]
-pub struct RabbitmqProducerChannelCallback {
+pub struct ChannelCallback {
     publisher_confirm_tx: mpsc::UnboundedSender<PublisherConfirm>,
     flow_tx: watch::Sender<bool>,
 }
 
-impl RabbitmqProducerChannelCallback {
+impl ChannelCallback {
     pub fn new(
         publisher_confirm_tx: mpsc::UnboundedSender<PublisherConfirm>,
         flow_tx: watch::Sender<bool>,
@@ -26,7 +23,7 @@ impl RabbitmqProducerChannelCallback {
 }
 
 #[async_trait]
-impl ChannelCallback for RabbitmqProducerChannelCallback {
+impl amqprs::callbacks::ChannelCallback for ChannelCallback {
     #[tracing::instrument(
         name = "RabbitMQ Producer Callback",
         target = "rabbitmq_client::producer_callback",

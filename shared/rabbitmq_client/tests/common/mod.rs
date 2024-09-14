@@ -1,5 +1,5 @@
 use amqprs::connection::{Connection, OpenConnectionArguments};
-use rabbitmq_client::{RabbitmqConnection, RabbitmqConnectionConfig};
+use rabbitmq_client::connection::{RabbitmqConnection, RabbitmqConnectionConfig};
 use std::time::Duration;
 use tracing::level_filters::LevelFilter;
 

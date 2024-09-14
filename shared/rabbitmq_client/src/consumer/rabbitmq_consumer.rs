@@ -1,16 +1,13 @@
 use super::{
-    rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine,
-    RabbitmqConsumerStatusChangeCallback,
+    callback::{RabbitmqConsumerDeliveryCallback, RabbitmqConsumerStatusChangeCallback},
+    state_machine::StateMachine,
 };
 use crate::{
-    rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
-    RabbitmqConnection,
+    connection::RabbitmqConnection,
+    consumer::{async_consumer::AsyncConsumer, channel_callback::ChannelCallback},
 };
-use amqprs::{
-    channel::{
-        BasicConsumeArguments, ExchangeDeclareArguments, QueueBindArguments, QueueDeclareArguments,
-    },
-    consumer::AsyncConsumer,
+use amqprs::channel::{
+    BasicConsumeArguments, ExchangeDeclareArguments, QueueBindArguments, QueueDeclareArguments,
 };
 use std::sync::Arc;
 use tokio::{sync::Notify, task::JoinHandle};
@@ -27,17 +24,17 @@ impl RabbitmqConsumer {
         target = "rabbitmq_client::consumer",
         skip_all
     )]
-    pub async fn new<Consumer, StatusCallback>(
+    pub async fn new<DeliveryCallback, StatusCallback>(
         rabbitmq_connection: RabbitmqConnection,
         mut exchange_declare_args: ExchangeDeclareArguments,
         mut queue_declare_args: QueueDeclareArguments,
         mut queue_bind_args: Vec<QueueBindArguments>,
         mut basic_consume_args: BasicConsumeArguments,
-        consumer: Consumer,
+        delivery_callback: DeliveryCallback,
         status_callback: StatusCallback,
     ) -> anyhow::Result<Self>
     where
-        Consumer: AsyncConsumer + Clone + Send + 'static,
+        DeliveryCallback: RabbitmqConsumerDeliveryCallback + Send + Sync + 'static,
         StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
     {
         tracing::info!("starting consumer");
@@ -53,7 +50,7 @@ impl RabbitmqConsumer {
         tracing::info!("registering channel callback");
         let consumer_cancelled = Arc::new(Notify::new());
         let consumer_cancelled_clone = Arc::clone(&consumer_cancelled);
-        let channel_callback = RabbitmqConsumerChannelCallback::new(consumer_cancelled_clone);
+        let channel_callback = ChannelCallback::new(consumer_cancelled_clone);
         channel.register_callback(channel_callback).await?;
 
         tracing::info!("declaring exchange");
@@ -73,12 +70,15 @@ impl RabbitmqConsumer {
         }
 
         tracing::info!("consuming");
+        let delivery_callback = Arc::new(delivery_callback);
+        let consumer = AsyncConsumer::new(channel.clone(), Arc::clone(&delivery_callback));
+        basic_consume_args.no_ack = false;
         basic_consume_args.no_wait = false;
         channel
-            .basic_consume(consumer.clone(), basic_consume_args.clone())
+            .basic_consume(consumer, basic_consume_args.clone())
             .await?;
 
-        let state_machine = RabbitmqConsumerStateMachine::new(
+        let state_machine = StateMachine::new(
             rabbitmq_connection,
             connection,
             connection_rx,
@@ -87,8 +87,8 @@ impl RabbitmqConsumer {
             queue_declare_args,
             queue_bind_args,
             basic_consume_args,
-            consumer,
             consumer_cancelled,
+            delivery_callback,
             status_callback,
         );
 

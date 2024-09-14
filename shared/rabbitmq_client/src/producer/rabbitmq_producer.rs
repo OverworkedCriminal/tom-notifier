@@ -1,8 +1,5 @@
-use super::{dto::Message, rabbitmq_producer_state_machine::RabbitmqProducerStateMachine};
-use crate::{
-    rabbitmq_producer::rabbitmq_producer_channel_callback::RabbitmqProducerChannelCallback,
-    RabbitmqConnection,
-};
+use super::{dto::Message, state_machine::StateMachine};
+use crate::{connection::RabbitmqConnection, producer::channel_callback::ChannelCallback};
 use amqprs::{
     channel::{ConfirmSelectArguments, ExchangeDeclareArguments},
     BasicProperties,
@@ -45,7 +42,7 @@ impl RabbitmqProducer {
         let (confirms_tx, confirms_rx) = mpsc::unbounded_channel();
         let (messages_tx, messages_rx) = mpsc::unbounded_channel();
         let (flow_tx, flow_rx) = watch::channel(true);
-        let channel_callback = RabbitmqProducerChannelCallback::new(confirms_tx, flow_tx.clone());
+        let channel_callback = ChannelCallback::new(confirms_tx, flow_tx.clone());
         channel.register_callback(channel_callback.clone()).await?;
 
         tracing::info!("declaring exchange");
@@ -58,7 +55,7 @@ impl RabbitmqProducer {
         let args = ConfirmSelectArguments::new(false);
         channel.confirm_select(args).await?;
 
-        let state_machine = RabbitmqProducerStateMachine::new(
+        let state_machine = StateMachine::new(
             rabbitmq_connection,
             connection,
             channel,

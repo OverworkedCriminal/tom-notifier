@@ -1,30 +1,30 @@
-use super::{rabbitmq_connection_callback::RabbitmqConnectionCallback, RabbitmqConnectionConfig};
+use super::{connection_callback::ConnectionCallback, RabbitmqConnectionConfig};
 use crate::retry::retry;
 use amqprs::connection::{Connection, OpenConnectionArguments};
 use std::sync::Arc;
 use tokio::sync::{watch, Notify};
 
-pub struct RabbitmqConnectionStateMachine {
+pub struct StateMachine {
     config: RabbitmqConnectionConfig,
 
     connection: Connection,
     connection_tx: watch::Sender<Option<Connection>>,
 
     open_connection_args: OpenConnectionArguments,
-    connection_callback: RabbitmqConnectionCallback,
+    connection_callback: ConnectionCallback,
 
     blocked_tx: watch::Sender<bool>,
 
     state: State,
 }
 
-impl RabbitmqConnectionStateMachine {
+impl StateMachine {
     pub fn new(
         config: RabbitmqConnectionConfig,
         connection: Connection,
         connection_tx: watch::Sender<Option<Connection>>,
         open_connection_args: OpenConnectionArguments,
-        connection_callback: RabbitmqConnectionCallback,
+        connection_callback: ConnectionCallback,
         blocked_tx: watch::Sender<bool>,
     ) -> Self {
         Self {

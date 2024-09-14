@@ -1,8 +1,8 @@
 use super::{
+    channel_callback::ChannelCallback,
     dto::{Message, PublisherConfirm},
-    rabbitmq_producer_channel_callback::RabbitmqProducerChannelCallback,
 };
-use crate::{rabbitmq_producer::dto::PublisherConfirmVariant, retry::retry, RabbitmqConnection};
+use crate::{connection::RabbitmqConnection, producer::dto::PublisherConfirmVariant, retry::retry};
 use amqprs::{
     channel::{BasicPublishArguments, Channel, ConfirmSelectArguments, ExchangeDeclareArguments},
     connection::Connection,
@@ -11,14 +11,14 @@ use anyhow::anyhow;
 use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::{mpsc, watch, Notify};
 
-pub struct RabbitmqProducerStateMachine {
+pub struct StateMachine {
     rabbitmq_connection: RabbitmqConnection,
 
     connection: Option<Connection>,
     connection_rx: watch::Receiver<Option<Connection>>,
 
     channel: Channel,
-    channel_callback: RabbitmqProducerChannelCallback,
+    channel_callback: ChannelCallback,
 
     exchange_declare_args: ExchangeDeclareArguments,
 
@@ -36,12 +36,12 @@ pub struct RabbitmqProducerStateMachine {
     state: State,
 }
 
-impl RabbitmqProducerStateMachine {
+impl StateMachine {
     pub fn new(
         rabbitmq_connection: RabbitmqConnection,
         connection: Connection,
         channel: Channel,
-        channel_callback: RabbitmqProducerChannelCallback,
+        channel_callback: ChannelCallback,
         exchange_declare_args: ExchangeDeclareArguments,
         connection_rx: watch::Receiver<Option<Connection>>,
         messages_tx: mpsc::UnboundedSender<Box<Message>>,

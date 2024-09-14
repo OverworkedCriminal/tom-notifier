@@ -1,20 +1,20 @@
-use amqprs::{callbacks::ConnectionCallback, connection::Connection, Close};
+use amqprs::{connection::Connection, Close};
 use async_trait::async_trait;
 use tokio::sync::watch;
 
 #[derive(Clone)]
-pub struct RabbitmqConnectionCallback {
+pub struct ConnectionCallback {
     blocked_tx: watch::Sender<bool>,
 }
 
-impl RabbitmqConnectionCallback {
+impl ConnectionCallback {
     pub fn new(blocked_tx: watch::Sender<bool>) -> Self {
         Self { blocked_tx }
     }
 }
 
 #[async_trait]
-impl ConnectionCallback for RabbitmqConnectionCallback {
+impl amqprs::callbacks::ConnectionCallback for ConnectionCallback {
     #[tracing::instrument(
         name = "RabbitMQ Connection Callback",
         target = "rabbitmq_client::connection_callback",

@@ -8,7 +8,7 @@ use axum::async_trait;
 use bson::oid::ObjectId;
 use prost::Message;
 use prost_types::Timestamp;
-use rabbitmq_client::{RabbitmqConnection, RabbitmqProducer};
+use rabbitmq_client::{connection::RabbitmqConnection, producer::RabbitmqProducer};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
