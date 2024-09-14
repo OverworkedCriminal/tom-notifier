@@ -135,7 +135,8 @@ impl WebSocketsService for WebSocketsServiceImpl {
             let (messages_tx, messages_rx) = match connections_lock.get(&user_id) {
                 Some(messages_tx) => (messages_tx.clone(), messages_tx.subscribe()),
                 None => {
-                    let (messages_tx, messages_rx) = tokio::sync::broadcast::channel(16);
+                    let (messages_tx, messages_rx) =
+                        broadcast::channel(self.config.connection_buffer_size as usize);
                     connections_lock.insert(user_id, messages_tx.clone());
                     tracing::trace!(user_id = user_id_str, "added user to connected_users");
                     (messages_tx, messages_rx)
@@ -527,6 +528,7 @@ mod test {
             ping_interval: Duration::from_secs(600),
             retry_max_count: 10,
             retry_interval: Duration::from_secs(10),
+            connection_buffer_size: 16,
         };
 
         WebSocketsServiceImpl::new(config, Arc::new(MockConfirmationsService::new()))

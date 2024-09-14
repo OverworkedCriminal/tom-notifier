@@ -67,6 +67,7 @@ pub async fn create_state(
         ping_interval: env.websocket_ping_interval,
         retry_max_count: env.websocket_retry_max_count,
         retry_interval: env.websocket_retry_interval,
+        connection_buffer_size: env.websocket_connection_buffer_size,
     };
     let websockets_service =
         WebSocketsServiceImpl::new(config, rabbitmq_confirmations_service.clone());
