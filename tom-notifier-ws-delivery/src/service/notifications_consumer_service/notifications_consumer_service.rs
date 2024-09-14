@@ -54,7 +54,7 @@ impl NotificationsConsumerService {
             .manual_ack(true)
             .exclusive(true)
             .finish();
-        let consumer = Consumer {
+        let delivery_callback = DeliveryCallback {
             websockets_service: Arc::clone(&websockets_service),
             deduplication_service,
         };
@@ -65,7 +65,7 @@ impl NotificationsConsumerService {
             queue_declare_args,
             queue_bind_args,
             basic_consume_args,
-            consumer,
+            delivery_callback,
             status_callback,
         )
         .await?;
@@ -82,14 +82,13 @@ impl NotificationsConsumerService {
     }
 }
 
-#[derive(Clone)]
-struct Consumer {
+struct DeliveryCallback {
     websockets_service: Arc<dyn WebSocketsService>,
     deduplication_service: Arc<dyn NotificationsDeduplicationService>,
 }
 
 #[async_trait]
-impl RabbitmqConsumerDeliveryCallback for Consumer {
+impl RabbitmqConsumerDeliveryCallback for DeliveryCallback {
     async fn execute(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
         let message =
             input::RabbitmqNotificationProtobuf::decode(content.as_slice()).map_err(|err| {
@@ -130,7 +129,7 @@ impl RabbitmqConsumerDeliveryCallback for Consumer {
             }
             Err(Error::Duplicate) => {
                 tracing::trace!("notification already processed");
-                Err(ConsumeError { requeue: false })
+                Ok(())
             }
             Err(err) => {
                 tracing::warn!(%err, "failed to deduplicate notification");
