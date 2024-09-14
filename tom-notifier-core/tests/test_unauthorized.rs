@@ -11,6 +11,8 @@ use reqwest::{Client, StatusCode};
 
 #[tokio::test]
 async fn post_notifications_undelivered() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -27,6 +29,8 @@ async fn post_notifications_undelivered() {
 
 #[tokio::test]
 async fn get_notifications_undelivered() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -43,6 +47,8 @@ async fn get_notifications_undelivered() {
 
 #[tokio::test]
 async fn put_notifications_undelivered_invalidate_at() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -60,6 +66,8 @@ async fn put_notifications_undelivered_invalidate_at() {
 
 #[tokio::test]
 async fn get_notifications_delivered() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -76,6 +84,8 @@ async fn get_notifications_delivered() {
 
 #[tokio::test]
 async fn get_notification_delivered() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -93,6 +103,8 @@ async fn get_notification_delivered() {
 
 #[tokio::test]
 async fn delete_notification_delivered() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -110,6 +122,8 @@ async fn delete_notification_delivered() {
 
 #[tokio::test]
 async fn put_notification_delivered_seen() {
+    init_env();
+
     let client = Client::new();
 
     let response = client
@@ -127,6 +141,8 @@ async fn put_notification_delivered_seen() {
 
 #[tokio::test]
 async fn get_non_existent_uri() {
+    init_env();
+
     let client = Client::new();
 
     let response = client

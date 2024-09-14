@@ -21,6 +21,8 @@ mod protobuf {
 
 #[tokio::test]
 async fn confirmed_message_does_not_appear_in_undelivered_notifications() {
+    init_env();
+
     let client = Client::new();
     let user_id = Uuid::new_v4();
     let user = create_consumer_jwt_with_id(user_id);

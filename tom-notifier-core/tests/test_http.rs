@@ -13,6 +13,8 @@ use uuid::Uuid;
 #[tokio::test]
 #[parallel]
 async fn get_undelivered_notifications_after_producing_them() {
+    init_env();
+
     // after producing notification
     // fetching undelivered notifications should return produced notification
     // fetching undelivered notifications again should return an empty array
@@ -88,6 +90,8 @@ async fn get_undelivered_notifications_after_producing_them() {
 #[tokio::test]
 #[parallel]
 async fn get_delivered_not_find_anything_unless_find_undelivered_was_called() {
+    init_env();
+
     // after producing notification
     // fetching delivered notification should return 404, because notifications
     // stay in "undelivered" state until get_undelivered is called
@@ -141,6 +145,8 @@ async fn get_delivered_not_find_anything_unless_find_undelivered_was_called() {
 #[tokio::test]
 #[parallel]
 async fn get_delivered_find_all_notifications() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // get_delivered should return the same records that were fetched before
 
@@ -244,6 +250,8 @@ async fn get_delivered_find_all_notifications() {
 #[tokio::test]
 #[parallel]
 async fn get_delivered_find_all_notifications_one_by_one() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // they should be marked as delivered so fetching them by ID should be possible
 
@@ -343,6 +351,8 @@ async fn get_delivered_find_all_notifications_one_by_one() {
 #[tokio::test]
 #[parallel]
 async fn multicast_get_undelivered_notifications_received_by_all_users() {
+    init_env();
+
     // after producing notifications
     // all recipients should be able to fetch them
 
@@ -431,6 +441,8 @@ async fn multicast_get_undelivered_notifications_received_by_all_users() {
 #[tokio::test]
 #[parallel]
 async fn multicast_get_undelivered_does_not_affect_other_users() {
+    init_env();
+
     // after producing notifications
     // when user_1 fetch undelivered notifications
     // user_2 notifications still should be in undelivered state
@@ -523,6 +535,8 @@ async fn multicast_get_undelivered_does_not_affect_other_users() {
 #[tokio::test]
 #[parallel]
 async fn multicast_update_seen_does_not_affect_other_users() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // when user_1 change status to 'seen' it should not affect user_2
 
@@ -633,6 +647,8 @@ async fn multicast_update_seen_does_not_affect_other_users() {
 #[tokio::test]
 #[parallel]
 async fn multicast_delete_does_not_affect_other_users() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // when user_1 delete notification it should not affect user_2
 
@@ -730,6 +746,8 @@ async fn multicast_delete_does_not_affect_other_users() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn broadcast_get_undelivered_notifications_received_by_all_users() {
+    init_env();
+
     // after producing notification
     // all users should be able to fetch it
 
@@ -803,6 +821,8 @@ async fn broadcast_get_undelivered_notifications_received_by_all_users() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn broadcast_update_seen_does_not_affect_other_users() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // when any user changes status to 'seen' it should not affect other users
 
@@ -941,6 +961,8 @@ async fn broadcast_update_seen_does_not_affect_other_users() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn broadcast_delete_does_not_affect_other_users() {
+    init_env();
+
     // after producing and fetching undelivered notifications
     // when any user deletes notification it should not affect other users
 

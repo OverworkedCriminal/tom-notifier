@@ -1,4 +1,4 @@
-use super::{FanoutService, RabbitmqFanoutServiceConfig};
+use super::{NotificationsProducerService, NotificationsProducerServiceConfig};
 use crate::dto::output;
 use amqprs::{
     channel::{ExchangeDeclareArguments, ExchangeType},
@@ -12,13 +12,13 @@ use rabbitmq_client::{RabbitmqConnection, RabbitmqProducer};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-pub struct RabbitmqFanoutService {
+pub struct NotificationsProducerServiceImpl {
     producer: RabbitmqProducer,
 }
 
-impl RabbitmqFanoutService {
+impl NotificationsProducerServiceImpl {
     pub async fn new(
-        config: RabbitmqFanoutServiceConfig,
+        config: NotificationsProducerServiceConfig,
         rabbitmq_connection: RabbitmqConnection,
     ) -> anyhow::Result<Self> {
         let exchange_declare_args =
@@ -40,7 +40,7 @@ impl RabbitmqFanoutService {
 }
 
 #[async_trait]
-impl FanoutService for RabbitmqFanoutService {
+impl NotificationsProducerService for NotificationsProducerServiceImpl {
     async fn send_new(
         &self,
         user_ids: Vec<Uuid>,
@@ -51,10 +51,14 @@ impl FanoutService for RabbitmqFanoutService {
         content_type: String,
         content: Vec<u8>,
     ) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing NEW notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: user_ids.into_iter().map(|uuid| uuid.to_string()).collect(),
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::New.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
@@ -78,10 +82,14 @@ impl FanoutService for RabbitmqFanoutService {
         seen: bool,
         timestamp: OffsetDateTime,
     ) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing UPDATED notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::Updated.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
@@ -99,10 +107,14 @@ impl FanoutService for RabbitmqFanoutService {
     }
 
     async fn send_deleted(&self, user_id: Uuid, id: ObjectId, timestamp: OffsetDateTime) {
+        let id_str = id.to_hex();
+
+        tracing::info!(id = id_str, %timestamp, "producing DELETED notification");
+
         let message = output::RabbitmqNotificationProtobuf {
             user_ids: vec![user_id.to_string()],
             notification: Some(output::NotificationProtobuf {
-                id: id.to_hex(),
+                id: id_str,
                 status: output::NotificationStatusProtobuf::Deleted.into(),
                 timestamp: Some(Timestamp {
                     seconds: timestamp.unix_timestamp(),
