@@ -6,7 +6,9 @@ use crate::{
         notifications_consumer_service::{
             NotificationsConsumerService, NotificationsConsumerServiceConfig,
         },
-        notifications_deduplication_service::NotificationsDeduplicationServiceImpl,
+        notifications_deduplication_service::{
+            NotificationsDeduplicationServiceConfig, NotificationsDeduplicationServiceImpl,
+        },
         tickets_service::{TicketsSerivce, TicketsServiceConfig, TicketsServiceImpl},
         websockets_service::{WebSocketsService, WebSocketsServiceConfig, WebSocketsServiceImpl},
     },
@@ -28,6 +30,7 @@ pub struct ApplicationStateToClose {
     pub rabbitmq_connection: RabbitmqConnection,
     pub rabbitmq_confirmations_service: Arc<ConfirmationsServiceImpl>,
     pub rabbitmq_consumer_service: NotificationsConsumerService,
+    pub deduplication_service: Arc<NotificationsDeduplicationServiceImpl>,
 }
 
 pub async fn create_state(
@@ -67,12 +70,17 @@ pub async fn create_state(
         ping_interval: env.websocket_ping_interval,
         retry_max_count: env.websocket_retry_max_count,
         retry_interval: env.websocket_retry_interval,
+        connection_buffer_size: env.websocket_connection_buffer_size,
     };
     let websockets_service =
         WebSocketsServiceImpl::new(config, rabbitmq_confirmations_service.clone());
     let websockets_service = Arc::new(websockets_service);
 
-    let deduplication_service = NotificationsDeduplicationServiceImpl::new();
+    let config = NotificationsDeduplicationServiceConfig {
+        notification_lifespan: env.rabbitmq_deduplication_notification_lifespan,
+        garbage_collector_interval: env.rabbitmq_deduplication_garbage_collector_interval,
+    };
+    let deduplication_service = NotificationsDeduplicationServiceImpl::new(config);
     let deduplication_service = Arc::new(deduplication_service);
 
     let config = NotificationsConsumerServiceConfig {
@@ -83,7 +91,7 @@ pub async fn create_state(
         config,
         rabbitmq_connection.clone(),
         websockets_service.clone(),
-        deduplication_service,
+        deduplication_service.clone(),
     )
     .await?;
 
@@ -97,6 +105,7 @@ pub async fn create_state(
             rabbitmq_connection,
             rabbitmq_confirmations_service,
             rabbitmq_consumer_service,
+            deduplication_service,
         },
     ))
 }

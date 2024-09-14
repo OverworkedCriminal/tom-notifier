@@ -5,4 +5,6 @@ pub struct WebSocketsServiceConfig {
 
     pub retry_max_count: u8,
     pub retry_interval: Duration,
+
+    pub connection_buffer_size: u8,
 }

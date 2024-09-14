@@ -348,11 +348,8 @@ mod test {
         let time_begin = OffsetDateTime::now_utc();
         let ping_interval = Duration::from_millis(50);
 
-        let config = WebSocketsServiceConfig {
-            ping_interval: ping_interval.clone(),
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let mut config = create_test_config();
+        config.ping_interval = ping_interval;
 
         let (_handle, _ws_tx, mut ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -372,11 +369,8 @@ mod test {
         let time_begin = OffsetDateTime::now_utc();
         let ping_interval = Duration::from_millis(50);
 
-        let config = WebSocketsServiceConfig {
-            ping_interval: ping_interval.clone(),
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let mut config = create_test_config();
+        config.ping_interval = ping_interval;
 
         let (_handle, _ws_tx, mut ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -397,11 +391,9 @@ mod test {
     async fn ping_is_sent_after_pong_response() {
         let time_begin = OffsetDateTime::now_utc();
         let ping_interval = Duration::from_millis(50);
-        let config = WebSocketsServiceConfig {
-            ping_interval: ping_interval.clone(),
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+
+        let mut config = create_test_config();
+        config.ping_interval = ping_interval;
 
         let (_handle, mut ws_tx, mut ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -434,11 +426,9 @@ mod test {
     async fn ping_user_unresponsive() {
         let time_begin = OffsetDateTime::now_utc();
         let ping_interval = Duration::from_millis(50);
-        let config = WebSocketsServiceConfig {
-            ping_interval: ping_interval.clone(),
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+
+        let mut config = create_test_config();
+        config.ping_interval = ping_interval;
 
         let (handle, _ws_tx, mut ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -464,11 +454,8 @@ mod test {
 
     #[tokio::test]
     async fn ping_websocket_connection_closed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_millis(50),
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let mut config = create_test_config();
+        config.ping_interval = Duration::from_millis(50);
 
         let (handle, _ws_tx, ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -484,11 +471,7 @@ mod test {
 
     #[tokio::test]
     async fn response_confirmation_delivered_callback_executed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let mut confirmations_service = MockConfirmationsService::new();
         confirmations_service
@@ -540,11 +523,7 @@ mod test {
 
     #[tokio::test]
     async fn response_channel_closed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -559,11 +538,7 @@ mod test {
 
     #[tokio::test]
     async fn response_invalid_binary_message_not_valid_protobuf() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -578,11 +553,7 @@ mod test {
 
     #[tokio::test]
     async fn response_invalid_binary_message_not_valid_message_id() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -602,11 +573,7 @@ mod test {
 
     #[tokio::test]
     async fn response_unsupported_text_message() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -624,11 +591,7 @@ mod test {
 
     #[tokio::test]
     async fn response_invalid_pong_message() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -646,11 +609,7 @@ mod test {
 
     #[tokio::test]
     async fn response_close_message() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -665,11 +624,7 @@ mod test {
 
     #[tokio::test]
     async fn response_read_error() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, mut ws_tx, _ws_rx, _notifications_tx) = start_test_connection(config);
 
@@ -687,11 +642,7 @@ mod test {
 
     #[tokio::test]
     async fn new_message_sent_to_the_user() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (_handle, _ws_tx, mut ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -717,11 +668,7 @@ mod test {
 
     #[tokio::test]
     async fn new_message_connection_closed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, _ws_tx, ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -744,11 +691,7 @@ mod test {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn new_message_channel_lagged() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, _ws_tx, _ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -774,11 +717,7 @@ mod test {
 
     #[tokio::test]
     async fn new_message_channel_closed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_secs(30), // does not matter here
-            retry_max_count: u8::MAX,                // does not matter here
-        };
+        let config = create_test_config();
 
         let (handle, _ws_tx, _ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -795,11 +734,10 @@ mod test {
     async fn queued_message_resend_until_confirmed() {
         let time_begin = OffsetDateTime::now_utc();
         let retry_interval = Duration::from_millis(50);
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: retry_interval.clone(),
-            retry_max_count: u8::MAX,
-        };
+
+        let mut config = create_test_config();
+        config.retry_interval = retry_interval;
+        config.retry_max_count = u8::MAX;
 
         let (_handle, mut ws_tx, mut ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -855,11 +793,10 @@ mod test {
     #[tokio::test]
     async fn queued_message_resend_until_limit_reached() {
         let retry_max_count = 4;
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_millis(50),
-            retry_max_count,
-        };
+
+        let mut config = create_test_config();
+        config.retry_interval = Duration::from_millis(50);
+        config.retry_max_count = retry_max_count;
 
         let (handle, _ws_tx, mut ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -894,11 +831,9 @@ mod test {
 
     #[tokio::test]
     async fn queued_message_connection_closed() {
-        let config = WebSocketsServiceConfig {
-            ping_interval: Duration::from_secs(600), // really long duration so pings don't interfere with test
-            retry_interval: Duration::from_millis(50),
-            retry_max_count: u8::MAX,
-        };
+        let mut config = create_test_config();
+        config.retry_interval = Duration::from_millis(50);
+        config.retry_max_count = u8::MAX;
 
         let (handle, _ws_tx, mut ws_rx, notifications_tx) = start_test_connection(config);
 
@@ -926,6 +861,18 @@ mod test {
             .await
             .unwrap() // timeout
             .unwrap();
+    }
+
+    ///
+    /// Creates config that won't interfere with tests
+    ///
+    fn create_test_config() -> WebSocketsServiceConfig {
+        WebSocketsServiceConfig {
+            ping_interval: Duration::from_secs(1200),
+            retry_interval: Duration::from_secs(1200),
+            retry_max_count: u8::MAX,
+            connection_buffer_size: u8::MAX,
+        }
     }
 
     ///
