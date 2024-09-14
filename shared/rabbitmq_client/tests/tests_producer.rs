@@ -8,7 +8,7 @@ use amqprs::{
     BasicProperties,
 };
 use common::*;
-use rabbitmq_client::RabbitmqProducer;
+use rabbitmq_client::producer::RabbitmqProducer;
 use serial_test::serial;
 use std::{process::Command, sync::Once, time::Duration};
 use time::OffsetDateTime;

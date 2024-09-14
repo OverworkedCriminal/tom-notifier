@@ -1,6 +1,5 @@
 pub mod connection;
 pub mod consumer;
-mod rabbitmq_producer;
-mod retry;
+pub mod producer;
 
-pub use rabbitmq_producer::RabbitmqProducer;
+mod retry;
