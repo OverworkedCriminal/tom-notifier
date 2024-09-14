@@ -66,6 +66,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "amqprs"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f4a9eb66b389027566baa0c94c48eb2b72e79bd228040303aed96fdc4c95e7f"
+dependencies = [
+ "amqp_serde",
+ "async-trait",
+ "bytes",
+ "serde",
+ "serde_bytes",
+ "tokio",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1572,7 +1586,7 @@ dependencies = [
 name = "rabbitmq_client"
 version = "0.1.0"
 dependencies = [
- "amqprs",
+ "amqprs 2.0.0",
  "anyhow",
  "async-trait",
  "tokio",
@@ -2443,7 +2457,7 @@ dependencies = [
 name = "tom-notifier-core"
 version = "0.1.0"
 dependencies = [
- "amqprs",
+ "amqprs 1.7.0",
  "anyhow",
  "axum",
  "base64 0.22.1",
