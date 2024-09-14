@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
-    RabbitmqConnection,
+    connection::RabbitmqConnection,
 };
 use amqprs::{
     channel::{

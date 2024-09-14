@@ -1,9 +1,8 @@
-mod rabbitmq_connection;
+pub mod connection;
 mod rabbitmq_consumer;
 mod rabbitmq_producer;
 mod retry;
 
-pub use rabbitmq_connection::{RabbitmqConnection, RabbitmqConnectionConfig};
 pub use rabbitmq_consumer::{
     RabbitmqConsumer, RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback,
 };

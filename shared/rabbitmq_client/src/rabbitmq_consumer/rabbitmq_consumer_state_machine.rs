@@ -1,7 +1,7 @@
 use super::{dto::RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback};
 use crate::{
     rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
-    retry::retry, RabbitmqConnection,
+    retry::retry, connection::RabbitmqConnection,
 };
 use amqprs::{
     channel::{

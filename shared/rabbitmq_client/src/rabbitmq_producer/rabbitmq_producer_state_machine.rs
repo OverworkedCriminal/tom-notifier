@@ -2,7 +2,7 @@ use super::{
     dto::{Message, PublisherConfirm},
     rabbitmq_producer_channel_callback::RabbitmqProducerChannelCallback,
 };
-use crate::{rabbitmq_producer::dto::PublisherConfirmVariant, retry::retry, RabbitmqConnection};
+use crate::{rabbitmq_producer::dto::PublisherConfirmVariant, retry::retry, connection::RabbitmqConnection};
 use amqprs::{
     channel::{BasicPublishArguments, Channel, ConfirmSelectArguments, ExchangeDeclareArguments},
     connection::Connection,

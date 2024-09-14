@@ -1,7 +1,7 @@
 use super::{dto::Message, rabbitmq_producer_state_machine::RabbitmqProducerStateMachine};
 use crate::{
     rabbitmq_producer::rabbitmq_producer_channel_callback::RabbitmqProducerChannelCallback,
-    RabbitmqConnection,
+    connection::RabbitmqConnection,
 };
 use amqprs::{
     channel::{ConfirmSelectArguments, ExchangeDeclareArguments},

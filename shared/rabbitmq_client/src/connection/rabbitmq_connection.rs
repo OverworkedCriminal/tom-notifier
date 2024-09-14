@@ -1,8 +1,5 @@
 use super::dto::RabbitmqConnectionConfig;
-use crate::rabbitmq_connection::{
-    rabbitmq_connection_callback::RabbitmqConnectionCallback,
-    rabbitmq_connection_state_machine::RabbitmqConnectionStateMachine,
-};
+use crate::connection::{connection_callback::ConnectionCallback, state_machine::StateMachine};
 use amqprs::connection::{Connection, OpenConnectionArguments};
 use std::sync::Arc;
 use tokio::{
@@ -47,13 +44,13 @@ impl RabbitmqConnection {
 
         tracing::info!("registering callback");
         let (blocked_tx, blocked_rx) = watch::channel(false);
-        let callback = RabbitmqConnectionCallback::new(blocked_tx.clone());
+        let callback = ConnectionCallback::new(blocked_tx.clone());
         connection.register_callback(callback.clone()).await?;
 
         tracing::info!("starting keep alive task");
         let close_notify = Arc::new(Notify::new());
         let (connection_tx, connection_rx) = watch::channel(Some(connection.clone()));
-        let state_machine = RabbitmqConnectionStateMachine::new(
+        let state_machine = StateMachine::new(
             config.clone(),
             connection,
             connection_tx,
