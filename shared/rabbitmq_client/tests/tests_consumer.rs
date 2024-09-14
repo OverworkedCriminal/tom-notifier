@@ -16,7 +16,7 @@ use rabbitmq_client::consumer::{
 use serial_test::{parallel, serial};
 use std::{process::Command, sync::Once, time::Duration};
 use tokio::{
-    sync::{mpsc, watch},
+    sync::mpsc,
     time::{sleep, timeout},
 };
 
@@ -256,12 +256,12 @@ async fn messages_received_by_the_consumer_after_server_restart() {
 #[parallel]
 async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
     struct StatusCallback {
-        tx: watch::Sender<RabbitmqConsumerStatus>,
+        tx: mpsc::UnboundedSender<RabbitmqConsumerStatus>,
     }
     #[async_trait]
     impl RabbitmqConsumerStatusChangeCallback for StatusCallback {
         async fn execute(&self, status: RabbitmqConsumerStatus) {
-            self.tx.send_replace(status);
+            self.tx.send(status).unwrap();
         }
     }
 
@@ -284,8 +284,7 @@ async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
         .finish();
     let (tx, _rx) = mpsc::unbounded_channel();
     let consumer = Consumer { tx };
-    let (consumer_status_tx, mut consumer_status_rx) =
-        watch::channel(RabbitmqConsumerStatus::Consuming);
+    let (consumer_status_tx, mut consumer_status_rx) = mpsc::unbounded_channel();
     let status_callback = StatusCallback {
         tx: consumer_status_tx,
     };
@@ -301,38 +300,35 @@ async fn consumer_status_changes_when_connection_is_broken_and_recreated() {
     .await
     .unwrap();
 
-    assert!(matches!(
-        *consumer_status_rx.borrow_and_update(),
-        RabbitmqConsumerStatus::Consuming,
-    ));
-
     let connection = create_connection().await.unwrap();
     let channel = connection.open_channel(None).await.unwrap();
+
+    // Consuming is emitted on OK state enter
+    // So it's necessary to read it here, so the rest of the test can proceed
+    let status = timeout(Duration::from_secs(5), consumer_status_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(status, RabbitmqConsumerStatus::Consuming));
 
     // Delete queue to force consumer cancelled signal
     let args = QueueDeleteArguments::new(QUEUE);
     channel.queue_delete(args).await.unwrap();
 
     // Status change is expected after removing consumer's queue
-    timeout(Duration::from_secs(5), consumer_status_rx.changed())
+    let status = timeout(Duration::from_secs(5), consumer_status_rx.recv())
         .await
         .unwrap()
         .unwrap();
-    assert!(matches!(
-        *consumer_status_rx.borrow_and_update(),
-        RabbitmqConsumerStatus::Recovering,
-    ));
+    assert!(matches!(status, RabbitmqConsumerStatus::Recovering));
 
     // Status change after some time is expected after consumer
     // recreates everything
-    timeout(Duration::from_secs(5), consumer_status_rx.changed())
+    let status = timeout(Duration::from_secs(5), consumer_status_rx.recv())
         .await
         .unwrap()
         .unwrap();
-    assert!(matches!(
-        *consumer_status_rx.borrow_and_update(),
-        RabbitmqConsumerStatus::Consuming,
-    ));
+    assert!(matches!(status, RabbitmqConsumerStatus::Consuming));
 
     rabbitmq_consumer.close().await;
     rabbitmq_connection.close().await;
