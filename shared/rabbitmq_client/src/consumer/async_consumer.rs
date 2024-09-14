@@ -127,12 +127,12 @@ where
     }
 
     #[tracing::instrument(
-        name = "RabbitMQ Consumer",
+        name = "RabbitMQ Consumer Processor",
         target = "rabbitmq_client::consumer",
-        skip_all
+        skip(self, content)
     )]
     async fn run(self, delivery_tag: AmqpDeliveryTag, content: Vec<u8>) {
-        tracing::info!(delivery_tag, "processing delivery");
+        tracing::info!("processing delivery");
 
         let callback_result = self.delivery_callback.execute(content).await;
         let response = match callback_result {
