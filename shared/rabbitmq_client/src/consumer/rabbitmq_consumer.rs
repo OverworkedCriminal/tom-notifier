@@ -1,11 +1,5 @@
-use super::{
-    rabbitmq_consumer_state_machine::RabbitmqConsumerStateMachine,
-    RabbitmqConsumerStatusChangeCallback,
-};
-use crate::{
-    rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
-    connection::RabbitmqConnection,
-};
+use super::{callback::RabbitmqConsumerStatusChangeCallback, state_machine::StateMachine};
+use crate::{connection::RabbitmqConnection, consumer::channel_callback::ChannelCallback};
 use amqprs::{
     channel::{
         BasicConsumeArguments, ExchangeDeclareArguments, QueueBindArguments, QueueDeclareArguments,
@@ -53,7 +47,7 @@ impl RabbitmqConsumer {
         tracing::info!("registering channel callback");
         let consumer_cancelled = Arc::new(Notify::new());
         let consumer_cancelled_clone = Arc::clone(&consumer_cancelled);
-        let channel_callback = RabbitmqConsumerChannelCallback::new(consumer_cancelled_clone);
+        let channel_callback = ChannelCallback::new(consumer_cancelled_clone);
         channel.register_callback(channel_callback).await?;
 
         tracing::info!("declaring exchange");
@@ -78,7 +72,7 @@ impl RabbitmqConsumer {
             .basic_consume(consumer.clone(), basic_consume_args.clone())
             .await?;
 
-        let state_machine = RabbitmqConsumerStateMachine::new(
+        let state_machine = StateMachine::new(
             rabbitmq_connection,
             connection,
             connection_rx,

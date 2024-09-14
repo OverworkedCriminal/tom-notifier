@@ -10,8 +10,8 @@ use amqprs::{
 };
 use async_trait::async_trait;
 use common::*;
-use rabbitmq_client::{
-    RabbitmqConsumer, RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback,
+use rabbitmq_client::consumer::{
+    callback::RabbitmqConsumerStatusChangeCallback, RabbitmqConsumer, RabbitmqConsumerStatus,
 };
 use serial_test::{parallel, serial};
 use std::{process::Command, sync::Once, time::Duration};

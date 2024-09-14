@@ -1,16 +1,13 @@
-use amqprs::{
-    callbacks::ChannelCallback, channel::Channel, Ack, BasicProperties, Cancel, CloseChannel, Nack,
-    Return,
-};
+use amqprs::{channel::Channel, Ack, BasicProperties, Cancel, CloseChannel, Nack, Return};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
-pub struct RabbitmqConsumerChannelCallback {
+pub struct ChannelCallback {
     consumer_cancelled_notify: Arc<Notify>,
 }
 
-impl RabbitmqConsumerChannelCallback {
+impl ChannelCallback {
     pub fn new(consumer_cancelled_notify: Arc<Notify>) -> Self {
         Self {
             consumer_cancelled_notify,
@@ -19,7 +16,7 @@ impl RabbitmqConsumerChannelCallback {
 }
 
 #[async_trait]
-impl ChannelCallback for RabbitmqConsumerChannelCallback {
+impl amqprs::callbacks::ChannelCallback for ChannelCallback {
     #[tracing::instrument(
         name = "RabbitMQ Consumer Callback",
         target = "rabbitmq_client::consumer_callback",

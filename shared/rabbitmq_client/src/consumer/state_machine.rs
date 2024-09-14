@@ -1,7 +1,6 @@
-use super::{dto::RabbitmqConsumerStatus, RabbitmqConsumerStatusChangeCallback};
+use super::{callback::RabbitmqConsumerStatusChangeCallback, dto::RabbitmqConsumerStatus};
 use crate::{
-    rabbitmq_consumer::rabbitmq_consumer_channel_callback::RabbitmqConsumerChannelCallback,
-    retry::retry, connection::RabbitmqConnection,
+    connection::RabbitmqConnection, consumer::channel_callback::ChannelCallback, retry::retry,
 };
 use amqprs::{
     channel::{
@@ -15,7 +14,7 @@ use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::{watch, Notify};
 
-pub struct RabbitmqConsumerStateMachine<Consumer, StatusCallback> {
+pub struct StateMachine<Consumer, StatusCallback> {
     rabbitmq_connection: RabbitmqConnection,
 
     connection: Option<Connection>,
@@ -34,7 +33,7 @@ pub struct RabbitmqConsumerStateMachine<Consumer, StatusCallback> {
     state: State,
 }
 
-impl<Consumer, StatusCallback> RabbitmqConsumerStateMachine<Consumer, StatusCallback>
+impl<Consumer, StatusCallback> StateMachine<Consumer, StatusCallback>
 where
     Consumer: AsyncConsumer + Clone + Send + 'static,
     StatusCallback: RabbitmqConsumerStatusChangeCallback + Send + 'static,
@@ -199,7 +198,7 @@ where
                     |attempt, err| tracing::warn!(attempt, %err, "failed to recreate channel callback"),
                     || async {
                         let consumer_cancelled = Arc::clone(&self.consumer_cancelled);
-                        let channel_callback = RabbitmqConsumerChannelCallback::new(consumer_cancelled);
+                        let channel_callback = ChannelCallback::new(consumer_cancelled);
                         self
                             .channel
                             .register_callback(channel_callback).await
