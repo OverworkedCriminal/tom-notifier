@@ -8,7 +8,7 @@ use uuid::Uuid;
 ///
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
-pub trait FanoutService: Send + Sync {
+pub trait NotificationsProducerService: Send + Sync {
     async fn send_new(
         &self,
         user_ids: Vec<Uuid>,

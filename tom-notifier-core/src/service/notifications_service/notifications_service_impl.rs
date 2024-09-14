@@ -3,7 +3,7 @@ use crate::{
     dto::{input, output},
     error::Error,
     repository::{self, NotificationsRepository},
-    service::fanout_service::FanoutService,
+    service::notifications_producer_service::NotificationsProducerService,
 };
 use axum::async_trait;
 use bson::oid::ObjectId;
@@ -14,19 +14,19 @@ use uuid::Uuid;
 pub struct NotificationsServiceImpl {
     config: NotificationsServiceConfig,
     repository: Arc<dyn NotificationsRepository>,
-    fanout_service: Arc<dyn FanoutService>,
+    notifications_producer_service: Arc<dyn NotificationsProducerService>,
 }
 
 impl NotificationsServiceImpl {
     pub fn new(
         config: NotificationsServiceConfig,
         repository: Arc<dyn NotificationsRepository>,
-        fanout_service: Arc<dyn FanoutService>,
+        notifications_producer_service: Arc<dyn NotificationsProducerService>,
     ) -> Self {
         Self {
             config,
             repository,
-            fanout_service,
+            notifications_producer_service,
         }
     }
 
@@ -101,7 +101,7 @@ impl NotificationsService for NotificationsServiceImpl {
         let id = inserted_notification.id.to_hex();
         tracing::info!(id, "created notification");
 
-        self.fanout_service
+        self.notifications_producer_service
             .send_new(
                 inserted_notification.user_ids,
                 inserted_notification.id,
@@ -200,7 +200,7 @@ impl NotificationsService for NotificationsServiceImpl {
 
         tracing::info!("deleted notification");
 
-        self.fanout_service
+        self.notifications_producer_service
             .send_deleted(user_id, id, OffsetDateTime::now_utc())
             .await;
 
@@ -254,7 +254,7 @@ impl NotificationsService for NotificationsServiceImpl {
 
         tracing::info!("updated seen");
 
-        self.fanout_service
+        self.notifications_producer_service
             .send_updated(user_id, id, seen, OffsetDateTime::now_utc())
             .await;
 
@@ -265,7 +265,7 @@ impl NotificationsService for NotificationsServiceImpl {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::service::fanout_service::MockFanoutService;
+    use crate::service::notifications_producer_service::MockNotificationsProducerService;
     use bson::oid::ObjectId;
     use repository::{InsertedNotification, MockNotificationsRepository};
     use std::time::Duration;
@@ -291,8 +291,8 @@ mod test {
                     content: b"data".to_vec(),
                 })
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service
             .expect_send_new()
             .once()
             .returning(|_, _, _, _, _, _, _| ());
@@ -301,7 +301,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -342,8 +342,8 @@ mod test {
                     content: b"data".to_vec(),
                 })
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service
             .expect_send_new()
             .once()
             .returning(|_, _, _, _, _, _, _| ());
@@ -352,7 +352,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -393,14 +393,14 @@ mod test {
                     content: b"data".to_vec(),
                 })
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_new().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_new().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -442,8 +442,8 @@ mod test {
                     content: content_clone,
                 })
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service
             .expect_send_new()
             .once()
             .returning(|_, _, _, _, _, _, _| ());
@@ -452,7 +452,7 @@ mod test {
                 max_content_len: MAX_CONTENT_LEN,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -494,14 +494,14 @@ mod test {
                     content: content_clone,
                 })
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_new().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_new().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: MAX_CONTENT_LEN,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -532,14 +532,14 @@ mod test {
         repository
             .expect_insert()
             .returning(|_, _, _, _, _, _, _| Err(repository::Error::InsertUniqueViolation));
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_new().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_new().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -566,14 +566,14 @@ mod test {
                 mongodb::error::ErrorKind::Custom(Arc::new("unexpected database error")).into(),
             ))
         });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_new().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_new().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let save_result = service
@@ -605,7 +605,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -641,7 +641,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -663,7 +663,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -704,7 +704,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let notifications = service
@@ -730,7 +730,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let find_result = service
@@ -777,7 +777,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let notifications = service
@@ -806,7 +806,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let find_result = service
@@ -829,7 +829,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let find_result = service
@@ -857,7 +857,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let find_result = service
@@ -873,14 +873,14 @@ mod test {
         repository
             .expect_delete()
             .returning(|_, _| Err(repository::Error::NoDocumentUpdated));
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_deleted().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_deleted().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service
@@ -898,14 +898,14 @@ mod test {
                 mongodb::error::ErrorKind::Custom(Arc::new("any database error")).into(),
             ))
         });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_deleted().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_deleted().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service
@@ -919,8 +919,8 @@ mod test {
     async fn delete_notification_ok() {
         let mut repository = MockNotificationsRepository::new();
         repository.expect_delete().returning(|_, _| Ok(()));
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service
             .expect_send_deleted()
             .once()
             .returning(|_, _, _| ());
@@ -929,7 +929,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service
@@ -950,7 +950,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let passed_invalidate_at = OffsetDateTime::now_utc() - Duration::from_secs(300);
@@ -979,7 +979,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -1010,7 +1010,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -1037,7 +1037,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(MockFanoutService::new()),
+            Arc::new(MockNotificationsProducerService::new()),
         );
 
         let result = service
@@ -1059,14 +1059,14 @@ mod test {
         repository
             .expect_update_confirmation_seen()
             .returning(|_, _, _| Err(repository::Error::NoDocumentUpdated));
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_updated().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_updated().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service
@@ -1090,14 +1090,14 @@ mod test {
                     mongodb::error::ErrorKind::Custom(Arc::new("any database error")).into(),
                 ))
             });
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service.expect_send_updated().never();
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service.expect_send_updated().never();
         let service = NotificationsServiceImpl::new(
             NotificationsServiceConfig {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service
@@ -1117,8 +1117,8 @@ mod test {
         repository
             .expect_update_confirmation_seen()
             .returning(|_, _, _| Ok(()));
-        let mut fanout_service = MockFanoutService::new();
-        fanout_service
+        let mut notifications_producer_service = MockNotificationsProducerService::new();
+        notifications_producer_service
             .expect_send_updated()
             .once()
             .returning(|_, _, _, _| ());
@@ -1127,7 +1127,7 @@ mod test {
                 max_content_len: usize::MAX,
             },
             Arc::new(repository),
-            Arc::new(fanout_service),
+            Arc::new(notifications_producer_service),
         );
 
         let result = service

@@ -2,12 +2,12 @@ use super::ApplicationStateToClose;
 use std::sync::Arc;
 
 pub async fn close(state: ApplicationStateToClose) {
-    tracing::info!("closing rabbitmq fanout service");
-    match Arc::try_unwrap(state.rabbitmq_fanout_service) {
-        Ok(rabbitmq_fanout_service) => {
-            rabbitmq_fanout_service.close().await;
+    tracing::info!("closing rabbitmq notifications producer");
+    match Arc::try_unwrap(state.rabbitmq_notifications_producer_service) {
+        Ok(rabbitmq_notifications_producer) => {
+            rabbitmq_notifications_producer.close().await;
         }
-        Err(_) => tracing::error!("cannot close rabbitmq fanout service"),
+        Err(_) => tracing::error!("cannot close rabbitmq notifications producer"),
     }
 
     tracing::info!("closing rabbitmq confirmations consumer");

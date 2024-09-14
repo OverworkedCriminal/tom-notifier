@@ -5,7 +5,9 @@ use crate::{
         confirmations_consumer_service::{
             ConfirmationsConsumerService, ConfirmationsConsumerServiceConfig,
         },
-        fanout_service::{RabbitmqFanoutService, RabbitmqFanoutServiceConfig},
+        notifications_producer_service::{
+            NotificationsProducerServiceConfig, NotificationsProducerServiceImpl,
+        },
         notifications_service::{
             NotificationsService, NotificationsServiceConfig, NotificationsServiceImpl,
         },
@@ -25,7 +27,7 @@ pub struct ApplicationState {
 pub struct ApplicationStateToClose {
     pub db_client: Client,
     pub rabbitmq_connection: RabbitmqConnection,
-    pub rabbitmq_fanout_service: Arc<RabbitmqFanoutService>,
+    pub rabbitmq_notifications_producer_service: Arc<NotificationsProducerServiceImpl>,
     pub rabbitmq_confirmations_consumer_service: ConfirmationsConsumerService,
 }
 
@@ -49,12 +51,12 @@ pub async fn create_state(
         OpenConnectionArguments::try_from(env.rabbitmq_connection_string.as_str())?;
     let rabbitmq_connection = RabbitmqConnection::new(config, open_connection_args).await?;
 
-    let config = RabbitmqFanoutServiceConfig {
+    let config = NotificationsProducerServiceConfig {
         exchange_name: env.rabbitmq_notifications_exchange_name.clone(),
     };
-    let rabbitmq_fanout_service =
-        RabbitmqFanoutService::new(config, rabbitmq_connection.clone()).await?;
-    let rabbitmq_fanout_service = Arc::new(rabbitmq_fanout_service);
+    let rabbitmq_notifications_producer_service =
+        NotificationsProducerServiceImpl::new(config, rabbitmq_connection.clone()).await?;
+    let rabbitmq_notifications_producer_service = Arc::new(rabbitmq_notifications_producer_service);
 
     let config = ConfirmationsConsumerServiceConfig {
         exchange: env.rabbitmq_confirmations_exchange_name.clone(),
@@ -73,7 +75,7 @@ pub async fn create_state(
     let notifications_service = NotificationsServiceImpl::new(
         notifications_service_config,
         notifications_repository,
-        rabbitmq_fanout_service.clone(),
+        rabbitmq_notifications_producer_service.clone(),
     );
     let notifications_service = Arc::new(notifications_service);
 
@@ -84,7 +86,7 @@ pub async fn create_state(
         ApplicationStateToClose {
             db_client,
             rabbitmq_connection,
-            rabbitmq_fanout_service,
+            rabbitmq_notifications_producer_service,
             rabbitmq_confirmations_consumer_service,
         },
     ))

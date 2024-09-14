@@ -1,4 +1,4 @@
-use super::{FanoutService, RabbitmqFanoutServiceConfig};
+use super::{NotificationsProducerService, NotificationsProducerServiceConfig};
 use crate::dto::output;
 use amqprs::{
     channel::{ExchangeDeclareArguments, ExchangeType},
@@ -12,13 +12,13 @@ use rabbitmq_client::{RabbitmqConnection, RabbitmqProducer};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-pub struct RabbitmqFanoutService {
+pub struct NotificationsProducerServiceImpl {
     producer: RabbitmqProducer,
 }
 
-impl RabbitmqFanoutService {
+impl NotificationsProducerServiceImpl {
     pub async fn new(
-        config: RabbitmqFanoutServiceConfig,
+        config: NotificationsProducerServiceConfig,
         rabbitmq_connection: RabbitmqConnection,
     ) -> anyhow::Result<Self> {
         let exchange_declare_args =
@@ -40,7 +40,7 @@ impl RabbitmqFanoutService {
 }
 
 #[async_trait]
-impl FanoutService for RabbitmqFanoutService {
+impl NotificationsProducerService for NotificationsProducerServiceImpl {
     async fn send_new(
         &self,
         user_ids: Vec<Uuid>,
