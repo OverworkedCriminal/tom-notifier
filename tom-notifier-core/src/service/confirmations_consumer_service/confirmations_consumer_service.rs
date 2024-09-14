@@ -3,20 +3,19 @@ use crate::{
     dto::input,
     repository::{self, NotificationsRepository},
 };
-use amqprs::{
-    channel::{
-        BasicAckArguments, BasicConsumeArguments, BasicNackArguments, Channel,
-        ExchangeDeclareArguments, ExchangeType, QueueBindArguments, QueueDeclareArguments,
-    },
-    consumer::AsyncConsumer,
-    BasicProperties, Deliver,
+use amqprs::channel::{
+    BasicConsumeArguments, ExchangeDeclareArguments, ExchangeType, QueueBindArguments,
+    QueueDeclareArguments,
 };
-use anyhow::anyhow;
 use axum::async_trait;
 use prost::Message;
 use rabbitmq_client::{
-    RabbitmqConnection, RabbitmqConsumer, RabbitmqConsumerStatus,
-    RabbitmqConsumerStatusChangeCallback,
+    connection::RabbitmqConnection,
+    consumer::{
+        callback::{RabbitmqConsumerDeliveryCallback, RabbitmqConsumerStatusChangeCallback},
+        error::ConsumeError,
+        RabbitmqConsumer, RabbitmqConsumerStatus,
+    },
 };
 use std::sync::Arc;
 
@@ -41,7 +40,7 @@ impl ConfirmationsConsumerService {
         let basic_consume_args = BasicConsumeArguments::new(&config.queue, "")
             .auto_ack(false)
             .finish();
-        let consumer = Consumer {
+        let delivery_callback = DeliveryCallback {
             notifications_repository,
         };
         let status_callback = StatusCallback;
@@ -51,7 +50,7 @@ impl ConfirmationsConsumerService {
             queue_declare_args,
             vec![queue_bind_args],
             basic_consume_args,
-            consumer,
+            delivery_callback,
             status_callback,
         )
         .await?;
@@ -64,21 +63,26 @@ impl ConfirmationsConsumerService {
     }
 }
 
-#[derive(Clone)]
-struct Consumer {
+struct DeliveryCallback {
     notifications_repository: Arc<dyn NotificationsRepository>,
 }
 
-impl Consumer {
-    async fn try_consume(&self, content: Vec<u8>) -> anyhow::Result<()> {
-        let message = input::RabbitmqConfirmationProtobuf::decode(content.as_slice())
-            .map_err(|err| anyhow!("invalid confirmation: {err}"))?;
+#[async_trait]
+impl RabbitmqConsumerDeliveryCallback for DeliveryCallback {
+    async fn execute(&self, content: Vec<u8>) -> Result<(), ConsumeError> {
+        let message =
+            input::RabbitmqConfirmationProtobuf::decode(content.as_slice()).map_err(|err| {
+                tracing::warn!(%err, "invalid confirmation");
+                ConsumeError { requeue: false }
+            })?;
 
         let id_str = message.id.clone();
         let user_id_str = message.user_id.clone();
 
-        let confirmation = Confirmation::try_from(message)
-            .map_err(|err| anyhow!("invalid confirmation: {err}"))?;
+        let confirmation = Confirmation::try_from(message).map_err(|err| {
+            tracing::warn!(%err, "invalid confirmation");
+            ConsumeError { requeue: false }
+        })?;
 
         tracing::info!(id = id_str, user_id = user_id_str, "inserting confirmation");
         match self
@@ -86,56 +90,19 @@ impl Consumer {
             .insert_confirmation(confirmation.id, confirmation.user_id)
             .await
         {
-            Ok(()) => tracing::info!("confirmation inserted"),
-            Err(repository::Error::NoDocumentUpdated) => {
-                tracing::info!("confirmation already exist")
-            }
-            Err(err) => anyhow::bail!("failed to insert confirmation: {err}"),
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl AsyncConsumer for Consumer {
-    #[tracing::instrument(
-        name = "Confirmations Consumer",
-        skip_all,
-        fields(
-            delivery_tag = deliver.delivery_tag(),
-        )
-    )]
-    async fn consume(
-        &mut self,
-        channel: &Channel,
-        deliver: Deliver,
-        _basic_properties: BasicProperties,
-        content: Vec<u8>,
-    ) {
-        tracing::info!("processing confirmation");
-
-        match self.try_consume(content).await {
             Ok(()) => {
-                tracing::trace!("sending ack");
-                let args = BasicAckArguments::new(deliver.delivery_tag(), false);
-                match channel.basic_ack(args).await {
-                    Ok(()) => tracing::trace!("ack sent"),
-                    Err(err) => tracing::warn!(%err, "failed to ack message"),
-                }
+                tracing::info!("confirmation inserted");
+                Ok(())
+            }
+            Err(repository::Error::NoDocumentUpdated) => {
+                tracing::info!("confirmation already exist");
+                Ok(())
             }
             Err(err) => {
-                tracing::warn!(%err, "failed to consume confirmation");
-                tracing::trace!("sending nack");
-                let args = BasicNackArguments::new(deliver.delivery_tag(), false, true);
-                match channel.basic_nack(args).await {
-                    Ok(()) => tracing::trace!("nack sent"),
-                    Err(err) => tracing::warn!(%err, "failed to nack message"),
-                }
+                tracing::warn!(%err, "failed to insert confirmation");
+                Err(ConsumeError { requeue: true })
             }
         }
-
-        tracing::info!("confirmation processed");
     }
 }
 

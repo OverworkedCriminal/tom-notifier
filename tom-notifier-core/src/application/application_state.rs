@@ -16,7 +16,7 @@ use crate::{
 use amqprs::connection::OpenConnectionArguments;
 use axum::extract::FromRef;
 use mongodb::{options::ClientOptions, Client};
-use rabbitmq_client::{RabbitmqConnection, RabbitmqConnectionConfig};
+use rabbitmq_client::connection::{RabbitmqConnection, RabbitmqConnectionConfig};
 use std::sync::Arc;
 
 #[derive(Clone, FromRef)]
