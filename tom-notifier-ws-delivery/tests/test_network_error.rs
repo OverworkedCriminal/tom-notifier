@@ -38,13 +38,16 @@ async fn network_status_update_received_on_rabbitmq_failure_and_recovery() -> an
     let Message::Binary(bytes) = ws_message else {
         panic!("invalid message type");
     };
-    let ws_message = WebSocketNotificationProtobuf::decode(bytes.as_slice())?;
-    assert_eq!(ws_message.network_status(), NetworkStatusProtobuf::Error);
-    assert!(ws_message.notification.is_none());
+    let ws_network_error = WebSocketNotificationProtobuf::decode(bytes.as_slice())?;
+    assert_eq!(
+        ws_network_error.network_status(),
+        NetworkStatusProtobuf::Error
+    );
+    assert!(ws_network_error.notification.is_none());
 
     // Respond with confirmation
     let confirmation = WebSocketConfirmationProtobuf {
-        message_id: ws_message.message_id,
+        message_id: ws_network_error.message_id.clone(),
     };
     ws.send(Message::Binary(confirmation.encode_to_vec()))
         .await?;
@@ -57,6 +60,11 @@ async fn network_status_update_received_on_rabbitmq_failure_and_recovery() -> an
                 Message::Binary(bytes) => {
                     let ws_message =
                         WebSocketNotificationProtobuf::decode(bytes.as_slice()).unwrap();
+                    if ws_message.message_id == ws_network_error.message_id {
+                        // It's not a problem if the same message was resent.
+                        // No confirmation is sent here because was sent earlier.
+                        continue;
+                    }
                     assert_eq!(ws_message.network_status(), NetworkStatusProtobuf::Ok);
                     assert!(ws_message.notification.is_none());
                     break;
