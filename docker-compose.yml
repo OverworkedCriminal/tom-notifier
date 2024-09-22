@@ -7,6 +7,8 @@ services:
       - 4000:4000
     networks:
       - tom-notifier-network
+    volumes:
+      - ./volumes/logs/core:/logs
     environment:
       TOM_NOTIFIER_CORE_DB_CONNECTION_STRING: mongodb://admin:admin@database:27017
       TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING: amqp://admin:admin@rabbitmq:5672
@@ -25,6 +27,8 @@ services:
       - 4001:4001
     networks:
       - tom-notifier-network
+    volumes:
+      - ./volumes/logs/ws-delivery:/logs
     environment:
       TOM_NOTIFIER_WS_DELIVERY_DB_CONNECTION_STRING: mongodb://admin:admin@database:27017
       TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING: amqp://admin:admin@rabbitmq:5672
@@ -44,6 +48,8 @@ services:
       - 27017:27017
     networks:
       - tom-notifier-network
+    volumes:
+      - ./volumes/database:/data/db
     healthcheck:
       test: ["CMD","mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 5s
@@ -61,6 +67,8 @@ services:
       - 5672:5672
     networks:
       - tom-notifier-network
+    volumes:
+      - ./volumes/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 15s
