@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rabbitmq_notification;
+
+import "notification.proto";
+
+message RabbitmqNotificationProtobuf {
+
+    /*
+     * Users that should receive notification
+     *
+     */
+    repeated string user_ids = 1;
+
+    notification.NotificationProtobuf notification = 2;
+}

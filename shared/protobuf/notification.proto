@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package notification;
+
+import "google/protobuf/timestamp.proto";
+
+enum NotificationStatusProtobuf {
+    NEW = 0;
+    UPDATED = 1;
+    DELETED = 2;
+}
+
+/*
+ * Message always contains 'id', 'status', 'timestamp'.
+ *
+ * - when 'status' is NEW it also contains all optional fields
+ * - when 'status' is UPDATED it also contains 'seen' optional field
+ * - when 'status' is DELETED it does not contain any optional fields
+ *
+ */
+message NotificationProtobuf {
+    string id = 1;
+    NotificationStatusProtobuf status = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    optional string created_by = 4;
+    optional bool seen = 5;
+    optional string content_type = 6;
+    optional bytes content = 7;
+}
