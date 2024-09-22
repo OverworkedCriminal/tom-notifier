@@ -34,6 +34,7 @@ jwt_auth = { path = "../shared/jwt_auth", features = ["test_utils"] }
 reqwest = "0.12.5"
 serde_json = "1.0.127"
 serial_test = "3.1.1"
+time = { version = "0.3.36", features = ["serde"] }
 tokio-tungstenite = "0.23.1"
 tower = { version = "0.5.0", features = ["util"] }
 

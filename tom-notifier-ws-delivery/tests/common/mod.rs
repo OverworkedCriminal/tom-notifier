@@ -68,7 +68,7 @@ pub async fn destroy_rabbitmq(connection: Connection, channel: Channel) {
     connection.close().await.unwrap();
 }
 
-fn encode_jwt(user_id: Uuid, roles: &[&str]) -> String {
+pub fn encode_jwt(user_id: Uuid, roles: &[&str]) -> String {
     let jwt_algorithms = std::env::var("TOM_NOTIFIER_WS_DELIVERY_JWT_ALGORITHMS").unwrap();
     let jwt_key = std::env::var("TOM_NOTIFIER_WS_DELIVERY_JWT_KEY").unwrap();
 
