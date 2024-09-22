@@ -1,4 +1,40 @@
 services:
+  core:
+    build:
+      context: .
+      dockerfile: tom-notifier-core/Dockerfile
+    ports:
+      - 4000:4000
+    networks:
+      - tom-notifier-network
+    environment:
+      TOM_NOTIFIER_CORE_DB_CONNECTION_STRING: mongodb://admin:admin@database:27017
+      TOM_NOTIFIER_CORE_RABBITMQ_CONNECTION_STRING: amqp://admin:admin@rabbitmq:5672
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+
+  ws-delivery:
+    build:
+      context: .
+      dockerfile: tom-notifier-ws-delivery/Dockerfile
+    ports:
+      - 4001:4001
+    networks:
+      - tom-notifier-network
+    environment:
+      TOM_NOTIFIER_WS_DELIVERY_DB_CONNECTION_STRING: mongodb://admin:admin@database:27017
+      TOM_NOTIFIER_WS_DELIVERY_RABBITMQ_CONNECTION_STRING: amqp://admin:admin@rabbitmq:5672
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+
   database:
     image: mongo
     environment:
@@ -6,6 +42,15 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: admin
     ports:
       - 27017:27017
+    networks:
+      - tom-notifier-network
+    healthcheck:
+      test: ["CMD","mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
 
   rabbitmq:
     image: rabbitmq:3
@@ -14,3 +59,15 @@ services:
       RABBITMQ_DEFAULT_PASS: admin
     ports:
       - 5672:5672
+    networks:
+      - tom-notifier-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 15s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+
+
+networks:
+  tom-notifier-network:
